@@ -1,0 +1,2621 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Contract Estimator</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.9/babel.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-storage-compat.js"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: 'Inter', -apple-system, sans-serif; background: #f0f2f5; color: #1a1a2e; }
+
+  @media print {
+    body * { visibility: hidden !important; }
+    #proposal-print, #proposal-print * { visibility: visible !important; }
+    #proposal-print { position: fixed !important; left: 0; top: 0; width: 100%; background: white; padding: 0.6in 0.75in; font-size: 11px; }
+    @page { margin: 0.5in; size: letter; }
+  }
+
+  .app-container { max-width: 1250px; margin: 0 auto; padding: 16px; }
+  .app-header { background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%); color: white; padding: 20px 28px; border-radius: 12px; margin-bottom: 16px; display: flex; justify-content: space-between; align-items: center; }
+  .app-header h1 { font-size: 22px; font-weight: 700; letter-spacing: -0.5px; }
+  .app-header .subtitle { font-size: 12px; opacity: 0.7; margin-top: 2px; }
+  .header-actions { display: flex; gap: 8px; }
+  .header-actions button { padding: 8px 14px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.25); background: rgba(255,255,255,0.1); color: white; font-size: 12px; cursor: pointer; font-weight: 500; transition: all 0.15s; }
+  .header-actions button:hover { background: rgba(255,255,255,0.2); }
+
+  .tab-bar { display: flex; gap: 0; margin-bottom: 16px; background: white; border-radius: 10px; overflow-x: auto; box-shadow: 0 1px 3px rgba(0,0,0,0.06); border: 1px solid #e8eaed; }
+  .tab-btn { flex: 1 0 auto; padding: 11px 14px; border: none; background: white; font-size: 11px; font-weight: 600; color: #888; cursor: pointer; transition: all 0.2s; font-family: inherit; position: relative; white-space: nowrap; }
+  .tab-btn:hover { color: #0f3460; background: #f8f9ff; }
+  .tab-btn.active { color: #0f3460; background: #e8f0ff; }
+  .tab-btn.active::after { content: ''; position: absolute; bottom: 0; left: 0; right: 0; height: 3px; background: #0f3460; }
+
+  .card { background: white; border-radius: 10px; padding: 20px; margin-bottom: 14px; box-shadow: 0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04); border: 1px solid #e8eaed; }
+  .card-title { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; color: #0f3460; margin-bottom: 14px; display: flex; justify-content: space-between; align-items: center; }
+  .card-title button { font-size: 11px; padding: 4px 10px; border-radius: 6px; border: 1px solid #ddd; background: #f8f9fa; cursor: pointer; color: #555; transition: all 0.15s; }
+  .card-title button:hover { background: #e8eaed; }
+
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; }
+  .grid-4 { display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 10px; }
+
+  .field { display: flex; flex-direction: column; }
+  .field label { font-size: 10px; font-weight: 600; color: #666; margin-bottom: 3px; text-transform: uppercase; letter-spacing: 0.5px; }
+  .field input, .field select { padding: 8px 10px; border: 1px solid #ddd; border-radius: 6px; font-size: 13px; font-family: inherit; transition: border 0.15s; background: #fafbfc; }
+  .field input:focus, .field select:focus { outline: none; border-color: #0f3460; background: white; }
+  .field textarea { padding: 8px 10px; border: 1px solid #ddd; border-radius: 6px; font-size: 13px; font-family: inherit; transition: border 0.15s; background: #fafbfc; resize: vertical; min-height: 34px; }
+  .field textarea:focus { outline: none; border-color: #0f3460; background: white; }
+
+  .rate-input { width: 80px; padding: 8px 10px; border: 2px solid #0f3460; border-radius: 6px; font-size: 15px; font-weight: 700; color: #0f3460; text-align: center; background: #f0f4ff; }
+  .rate-input:focus { outline: none; background: white; }
+
+  .line-table { width: 100%; border-collapse: separate; border-spacing: 0; }
+  .line-table thead th { background: #1a1a2e; color: white; padding: 8px 6px; font-size: 9px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; text-align: left; position: sticky; top: 0; z-index: 1; }
+  .line-table thead th:first-child { border-radius: 8px 0 0 0; }
+  .line-table thead th:last-child { border-radius: 0 8px 0 0; }
+  .line-table tbody tr { transition: background 0.1s; }
+  .line-table tbody tr:hover { background: #f8f9ff; }
+  .line-table td { padding: 5px 4px; border-bottom: 1px solid #f0f0f0; vertical-align: middle; }
+  .line-table input, .line-table select { width: 100%; padding: 5px 6px; border: 1px solid #e0e0e0; border-radius: 5px; font-size: 11px; font-family: inherit; background: white; }
+  .line-table input:focus, .line-table select:focus { outline: none; border-color: #0f3460; }
+  .line-table .cost-input { text-align: right; font-variant-numeric: tabular-nums; }
+  .line-table .qty-input { text-align: center; width: 50px; }
+  .line-table .final-price { font-weight: 700; color: #0f3460; text-align: right; font-size: 12px; font-variant-numeric: tabular-nums; padding-right: 8px; white-space: nowrap; }
+  .line-table .remove-btn { background: none; border: none; color: #ccc; cursor: pointer; font-size: 16px; padding: 4px 6px; border-radius: 4px; transition: all 0.15s; }
+  .line-table .remove-btn:hover { color: #e74c3c; background: #fee; }
+  .csi-select { font-size: 10px !important; padding: 5px 3px !important; }
+  .link-cell { display: flex; align-items: center; gap: 3px; }
+  .link-cell input { flex: 1; font-size: 9px !important; color: #2E75B6; }
+  .link-cell a { display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px; border-radius: 4px; background: #e8f4fd; color: #0f3460; text-decoration: none; font-size: 10px; flex-shrink: 0; border: 1px solid #c5dff0; transition: all 0.15s; }
+  .link-cell a:hover { background: #0f3460; color: white; }
+
+  .sub-line-row td { background: #f5f7fb !important; border-bottom: 1px solid #e8eaed !important; }
+  .sub-line-row:hover td { background: #edf0f8 !important; }
+  .sub-line-indicator { display: inline-block; width: 12px; height: 12px; border-left: 2px solid #b0bec5; border-bottom: 2px solid #b0bec5; margin-left: 6px; margin-bottom: 2px; }
+  .expand-btn { background: none; border: 1px solid #d0d5dd; color: #555; cursor: pointer; font-size: 11px; width: 22px; height: 22px; border-radius: 4px; display: inline-flex; align-items: center; justify-content: center; transition: all 0.15s; font-weight: 700; }
+  .expand-btn:hover { background: #e8eaed; border-color: #0f3460; color: #0f3460; }
+  .expand-btn.open { background: #0f3460; color: white; border-color: #0f3460; }
+  .add-sub-btn { background: none; border: 1px dashed #aab; color: #888; cursor: pointer; font-size: 10px; padding: 2px 6px; border-radius: 4px; transition: all 0.15s; font-family: inherit; font-weight: 600; }
+  .add-sub-btn:hover { border-color: #0f3460; color: #0f3460; background: #f0f4ff; }
+
+  /* Drag handle */
+  .drag-handle {
+    cursor: grab; color: #ccc; font-size: 14px; padding: 2px 4px;
+    user-select: none; transition: color 0.15s; line-height: 1;
+  }
+  .drag-handle:hover { color: #0f3460; }
+  .drag-handle:active { cursor: grabbing; }
+  tr.dragging { opacity: 0.4; }
+  tr.drag-over td { border-top: 3px solid #0f3460 !important; }
+
+  /* Tax checkbox */
+  .tax-check { width: 15px !important; height: 15px; cursor: pointer; accent-color: #0f3460; }
+
+  /* Trade select */
+  .trade-select { font-size: 10px !important; padding: 5px 2px !important; }
+
+  .group-block { margin-bottom: 10px; border: 1px solid #e8eaed; border-radius: 8px; overflow: hidden; }
+  .group-header { display: flex; justify-content: space-between; align-items: center; padding: 8px 14px; background: #1a1a2e; color: white; font-size: 12px; font-weight: 600; }
+  .group-header .group-subtotal { font-variant-numeric: tabular-nums; }
+  .group-lines { font-size: 11px; }
+  .group-lines .gl-row { display: flex; justify-content: space-between; padding: 5px 14px 5px 28px; border-bottom: 1px solid #f0f0f0; }
+  .group-lines .gl-row:last-child { border-bottom: none; }
+  .group-lines .gl-row:nth-child(even) { background: #fafbfc; }
+  .group-lines .gl-desc { color: #444; }
+  .group-lines .gl-amt { font-weight: 600; color: #0f3460; font-variant-numeric: tabular-nums; }
+
+  .proposal-doc .group-table { width: 100%; border-collapse: collapse; margin: 12px 0; }
+  .proposal-doc .group-table th { background: #1a1a2e; color: white; padding: 8px 12px; font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; text-align: left; }
+  .proposal-doc .group-table th:last-child { text-align: right; }
+  .proposal-doc .group-table td { padding: 6px 12px; border-bottom: 1px solid #eee; font-size: 11px; }
+  .proposal-doc .group-table td:last-child { text-align: right; font-variant-numeric: tabular-nums; }
+  .proposal-doc .grp-hdr td { background: #e8edf3; font-weight: 700; color: #0f3460; font-size: 11px; border-bottom: 1px solid #ccc; padding: 7px 12px; }
+  .proposal-doc .grp-line td { padding-left: 28px; color: #444; font-size: 10px; }
+  .proposal-doc .grp-line td:last-child { font-weight: 500; }
+  .proposal-doc .grp-sub td { font-weight: 700; color: #0f3460; font-size: 11px; border-top: 1px solid #bbb; background: #f4f6f9; padding: 6px 12px; }
+
+  .totals-bar { display: flex; justify-content: flex-end; align-items: center; gap: 20px; padding: 16px 20px; background: linear-gradient(135deg, #1a1a2e, #0f3460); border-radius: 0 0 10px 10px; color: white; margin-top: -1px; flex-wrap: wrap; }
+  .totals-bar .total-item { text-align: right; }
+  .totals-bar .total-label { font-size: 10px; opacity: 0.7; text-transform: uppercase; letter-spacing: 0.5px; }
+  .totals-bar .total-value { font-size: 20px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .totals-bar .total-sub { font-size: 13px; font-weight: 500; opacity: 0.85; }
+
+  .btn-primary { padding: 10px 20px; background: #0f3460; color: white; border: none; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.15s; }
+  .btn-primary:hover { background: #1a1a2e; transform: translateY(-1px); }
+  .btn-add { padding: 8px 16px; background: #e8f4fd; color: #0f3460; border: 1px dashed #0f3460; border-radius: 8px; font-size: 12px; font-weight: 600; cursor: pointer; transition: all 0.15s; }
+  .btn-add:hover { background: #d0e8f7; }
+  .btn-sm { padding: 3px 8px; border-radius: 4px; font-size: 10px; font-weight: 600; cursor: pointer; transition: all 0.15s; border: 1px solid #ddd; background: #f8f9fa; color: #555; }
+  .btn-sm:hover { background: #e8eaed; }
+  .btn-sm.del { color: #c0392b; border-color: #f5c6cb; }
+  .btn-sm.del:hover { background: #fee; }
+  .btn-generate { padding: 12px 28px; background: linear-gradient(135deg, #27ae60, #2ecc71); color: white; border: none; border-radius: 8px; font-size: 14px; font-weight: 700; cursor: pointer; transition: all 0.15s; letter-spacing: 0.3px; }
+  .btn-generate:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(39,174,96,0.3); }
+  .action-bar { display: flex; justify-content: space-between; align-items: center; margin-top: 14px; }
+
+  .section-editor { margin-bottom: 16px; }
+  .section-editor-title { font-size: 12px; font-weight: 700; color: #0f3460; margin-bottom: 8px; padding-bottom: 4px; border-bottom: 2px solid #0f3460; display: flex; justify-content: space-between; align-items: center; }
+  .item-row { display: flex; align-items: flex-start; gap: 6px; margin-bottom: 5px; padding: 6px 8px; background: #fafbfc; border-radius: 6px; border: 1px solid #eee; }
+  .item-row:hover { border-color: #ccc; }
+  .item-num { min-width: 22px; font-size: 11px; font-weight: 700; color: #0f3460; padding-top: 8px; text-align: right; }
+  .item-text { flex: 1; }
+  .item-text textarea { width: 100%; padding: 6px 8px; border: 1px solid #ddd; border-radius: 5px; font-size: 12px; font-family: inherit; resize: none; min-height: 30px; line-height: 1.4; background: white; }
+  .item-text textarea:focus { outline: none; border-color: #0f3460; }
+  .item-btns { display: flex; gap: 3px; padding-top: 4px; flex-shrink: 0; }
+  .sub-items { margin-left: 30px; margin-top: 4px; }
+  .sub-row { display: flex; align-items: flex-start; gap: 6px; margin-bottom: 3px; }
+  .sub-label { min-width: 22px; font-size: 10px; color: #888; padding-top: 7px; text-align: right; }
+  .sub-row textarea { flex: 1; padding: 5px 8px; border: 1px solid #e0e0e0; border-radius: 4px; font-size: 11px; font-family: inherit; resize: none; min-height: 26px; line-height: 1.3; background: white; }
+  .sub-row textarea:focus { outline: none; border-color: #0f3460; }
+
+  .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 100; display: flex; justify-content: center; align-items: flex-start; padding: 30px; overflow-y: auto; }
+  .modal-content { background: white; border-radius: 12px; max-width: 850px; width: 100%; box-shadow: 0 20px 60px rgba(0,0,0,0.3); position: relative; }
+  .modal-toolbar { display: flex; justify-content: space-between; align-items: center; padding: 14px 20px; background: #f8f9fa; border-radius: 12px 12px 0 0; border-bottom: 1px solid #eee; }
+  .modal-toolbar button { padding: 8px 18px; border-radius: 6px; font-size: 12px; font-weight: 600; cursor: pointer; transition: all 0.15s; }
+
+  .proposal-doc { padding: 50px 60px; font-size: 12px; line-height: 1.5; color: #222; }
+  .proposal-doc .company-header { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 3px solid #0f3460; padding-bottom: 12px; margin-bottom: 20px; }
+  .proposal-doc .company-name { font-size: 20px; font-weight: 700; color: #0f3460; }
+  .proposal-doc .company-detail { font-size: 10px; color: #666; margin-top: 2px; }
+  .proposal-doc .proposal-badge { font-size: 24px; font-weight: 700; color: #0f3460; letter-spacing: 2px; }
+  .proposal-doc .meta-grid { display: grid; grid-template-columns: auto 1fr auto 1fr; gap: 4px 12px; margin-bottom: 20px; font-size: 11px; }
+  .proposal-doc .meta-label { font-weight: 700; color: #444; }
+  .proposal-doc .section-title { font-size: 12px; font-weight: 700; color: #0f3460; text-transform: uppercase; letter-spacing: 1px; border-bottom: 1px solid #ddd; padding-bottom: 4px; margin: 16px 0 10px; }
+  .proposal-doc .total-row td { font-weight: 700; font-size: 14px; border-top: 2px solid #0f3460; background: #f0f4ff !important; color: #0f3460; }
+  .proposal-doc .qual-section { font-size: 10px; color: #333; margin-top: 16px; }
+  .proposal-doc .qual-section h4 { font-size: 11px; font-weight: 700; color: #0f3460; margin-bottom: 4px; }
+  .proposal-doc .qual-section ol { padding-left: 18px; margin: 0; }
+  .proposal-doc .qual-section li { margin-bottom: 2px; }
+  .proposal-doc .qual-section .sub-list { list-style-type: lower-alpha; padding-left: 20px; margin-top: 2px; }
+  .proposal-doc .company-block { margin-top: 20px; padding: 12px 16px; background: #f8f9fa; border-left: 3px solid #0f3460; font-size: 10px; line-height: 1.6; }
+  .proposal-doc .company-block strong { font-size: 11px; color: #0f3460; }
+  .proposal-doc .closing { margin-top: 16px; font-style: italic; font-size: 10px; color: #555; }
+  .proposal-doc .sig-block { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; margin-top: 24px; }
+  .proposal-doc .sig-line { border-top: 1px solid #333; padding-top: 4px; font-size: 10px; color: #666; margin-top: 30px; }
+
+  .takeoff-container { display: flex; gap: 16px; min-height: 600px; }
+  .takeoff-sidebar { width: 320px; flex-shrink: 0; display: flex; flex-direction: column; gap: 12px; }
+  .takeoff-canvas-wrap { flex: 1; background: white; border-radius: 10px; border: 1px solid #e8eaed; box-shadow: 0 1px 3px rgba(0,0,0,0.06); overflow: hidden; position: relative; display: flex; flex-direction: column; }
+  .takeoff-toolbar { display: flex; align-items: center; gap: 8px; padding: 10px 14px; background: #1a1a2e; border-bottom: 1px solid #333; flex-shrink: 0; }
+  .takeoff-toolbar button { padding: 6px 12px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.2); background: rgba(255,255,255,0.08); color: #ddd; font-size: 11px; font-weight: 600; cursor: pointer; transition: all 0.15s; font-family: inherit; }
+  .takeoff-toolbar button:hover { background: rgba(255,255,255,0.18); color: white; }
+  .takeoff-toolbar button.active { background: #0f3460; color: white; border-color: #2a6cb8; }
+  .takeoff-toolbar .separator { width: 1px; height: 20px; background: rgba(255,255,255,0.15); }
+  .takeoff-toolbar span { font-size: 11px; color: #aaa; }
+  .takeoff-canvas-area { flex: 1; overflow: auto; position: relative; background: #e8eaed; }
+  .measurement-row { display: flex; align-items: center; gap: 6px; padding: 8px 10px; background: #fafbfc; border: 1px solid #eee; border-radius: 6px; margin-bottom: 4px; font-size: 11px; transition: all 0.15s; }
+  .measurement-row:hover { border-color: #0f3460; background: #f0f4ff; }
+  .measurement-row .m-color { width: 14px; height: 14px; border-radius: 3px; flex-shrink: 0; }
+  .measurement-row .m-label { flex: 1; font-weight: 500; color: #333; }
+  .measurement-row .m-value { font-weight: 700; color: #0f3460; font-variant-numeric: tabular-nums; }
+  .measurement-row .m-del { background: none; border: none; color: #ccc; cursor: pointer; font-size: 14px; padding: 2px 4px; border-radius: 3px; }
+  .measurement-row .m-del:hover { color: #e74c3c; background: #fee; }
+  .scale-setup { padding: 14px; background: #fffbeb; border: 1px solid #f0d060; border-radius: 8px; font-size: 11px; color: #7a6200; }
+  .scale-setup strong { color: #5a4800; }
+  .color-picker-row { display: flex; gap: 4px; flex-wrap: wrap; }
+  .color-swatch { width: 24px; height: 24px; border-radius: 4px; cursor: pointer; border: 2px solid transparent; transition: all 0.15s; }
+  .color-swatch:hover { transform: scale(1.15); }
+  .color-swatch.selected { border-color: #1a1a2e; box-shadow: 0 0 0 2px white, 0 0 0 4px #1a1a2e; }
+  .zoom-controls { display: flex; align-items: center; gap: 4px; margin-left: auto; }
+  .zoom-controls button { width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; padding: 0; font-size: 16px; font-weight: 700; }
+
+  .export-menu { position: relative; display: inline-block; }
+  .export-dropdown { position: absolute; top: 100%; right: 0; margin-top: 6px; background: white; border-radius: 8px; box-shadow: 0 8px 30px rgba(0,0,0,0.18); border: 1px solid #e0e0e0; min-width: 220px; z-index: 50; overflow: hidden; }
+  .export-dropdown button { display: flex; align-items: center; gap: 10px; width: 100%; padding: 12px 16px; border: none; background: white; font-size: 12px; font-family: inherit; cursor: pointer; transition: all 0.1s; color: #333; text-align: left; }
+  .export-dropdown button:hover { background: #f0f4ff; color: #0f3460; }
+  .export-dropdown .drop-icon { font-size: 16px; width: 20px; text-align: center; }
+  .export-dropdown .drop-label { font-weight: 600; }
+  .export-dropdown .drop-desc { font-size: 10px; color: #888; font-weight: 400; }
+  .export-dropdown .drop-sep { height: 1px; background: #eee; margin: 0; }
+  .file-badge { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; background: rgba(39,174,96,0.15); color: #27ae60; border-radius: 4px; font-size: 10px; font-weight: 600; margin-left: 8px; }
+
+  /* ── Bid Comparison ──────────────────────── */
+  .bid-subs { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 14px; margin-bottom: 16px; }
+  .bid-sub-card {
+    background: white; border-radius: 10px; border: 1px solid #e8eaed; padding: 16px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.06); transition: all 0.15s; position: relative;
+  }
+  .bid-sub-card:hover { border-color: #0f3460; }
+  .bid-sub-card .sub-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 10px; }
+  .bid-sub-card .sub-name { font-size: 14px; font-weight: 700; color: #1a1a2e; }
+  .bid-sub-card .sub-company { font-size: 11px; color: #666; }
+  .bid-sub-card .sub-contact { font-size: 10px; color: #888; margin-top: 4px; }
+  .bid-sub-card .sub-total { font-size: 16px; font-weight: 700; color: #0f3460; margin-top: 8px; font-variant-numeric: tabular-nums; }
+  .bid-scope-row {
+    display: flex; gap: 6px; align-items: center; padding: 5px 0;
+    border-bottom: 1px solid #f0f0f0; font-size: 11px;
+  }
+  .bid-scope-row:last-child { border-bottom: none; }
+  .bid-scope-row .scope-name { flex: 1; color: #444; }
+  .bid-scope-row .scope-amt { font-weight: 600; color: #0f3460; font-variant-numeric: tabular-nums; width: 80px; text-align: right; }
+  .bid-matrix { width: 100%; border-collapse: collapse; font-size: 11px; }
+  .bid-matrix thead th {
+    background: #1a1a2e; color: white; padding: 10px 12px; font-size: 10px;
+    font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; text-align: left;
+    position: sticky; top: 0; z-index: 1;
+  }
+  .bid-matrix thead th:first-child { border-radius: 8px 0 0 0; }
+  .bid-matrix thead th:last-child { border-radius: 0 8px 0 0; }
+  .bid-matrix td { padding: 8px 12px; border-bottom: 1px solid #f0f0f0; }
+  .bid-matrix tr:hover td { background: #f8f9ff; }
+  .bid-matrix .scope-label { font-weight: 600; color: #333; }
+  .bid-matrix .bid-cell { text-align: right; font-variant-numeric: tabular-nums; font-weight: 500; }
+  .bid-matrix .bid-cell.lowest { color: #27ae60; font-weight: 700; background: #eafaf0; }
+  .bid-matrix .bid-cell.no-bid { color: #ccc; font-style: italic; }
+  .bid-matrix .bid-cell.included { color: #27ae60; font-weight: 700; background: #f0faf5; }
+  .bid-matrix .bid-cell.selected-bid { background: #e0f0ff; border: 2px solid #0f3460; border-radius: 4px; font-weight: 700; color: #0f3460; }
+  .bid-matrix tfoot td { font-weight: 700; border-top: 2px solid #0f3460; background: #f0f4ff; color: #0f3460; }
+  .bid-pdf-badge {
+    display: inline-flex; align-items: center; gap: 4px; padding: 3px 8px;
+    background: #f8f0f0; border: 1px solid #e8d0d0; border-radius: 4px;
+    font-size: 10px; color: #c0392b; font-weight: 600; cursor: pointer; transition: all 0.15s;
+  }
+  .bid-pdf-badge:hover { background: #f0e0e0; }
+  .add-sub-card {
+    border: 2px dashed #c0c8d4; border-radius: 10px; padding: 30px; text-align: center;
+    cursor: pointer; transition: all 0.2s; background: #fafbfc;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    min-height: 180px;
+  }
+  .add-sub-card:hover { border-color: #0f3460; background: #f0f4ff; }
+
+  /* ── Change Order (AIA) ──────────────────── */
+
+  /* Estimate selector */
+  .est-selector {
+    display: flex; gap: 6px; align-items: center; margin-bottom: 14px;
+    padding: 10px 14px; background: white; border-radius: 10px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.06); border: 1px solid #e8eaed;
+    flex-wrap: wrap;
+  }
+  .est-tab {
+    padding: 7px 14px; border-radius: 6px; border: 1px solid #ddd; background: #f8f9fa;
+    font-size: 12px; font-weight: 600; color: #666; cursor: pointer; font-family: inherit;
+    transition: all 0.15s; position: relative; display: flex; align-items: center; gap: 6px;
+  }
+  .est-tab:hover { border-color: #0f3460; color: #0f3460; }
+  .est-tab.active { background: #0f3460; color: white; border-color: #0f3460; }
+  .est-tab .est-close {
+    font-size: 13px; opacity: 0.5; margin-left: 2px; cursor: pointer;
+    width: 16px; height: 16px; display: inline-flex; align-items: center; justify-content: center;
+    border-radius: 3px;
+  }
+  .est-tab .est-close:hover { opacity: 1; background: rgba(255,255,255,0.25); }
+  .est-tab.active .est-close:hover { background: rgba(255,255,255,0.3); }
+  .est-add-btn {
+    padding: 7px 12px; border-radius: 6px; border: 1px dashed #aab;
+    background: transparent; font-size: 11px; font-weight: 600; color: #888;
+    cursor: pointer; font-family: inherit; transition: all 0.15s;
+  }
+  .est-add-btn:hover { border-color: #0f3460; color: #0f3460; background: #f0f4ff; }
+  .est-label { font-size: 10px; font-weight: 700; color: #888; text-transform: uppercase; letter-spacing: 0.5px; margin-right: 4px; }
+  .co-form { display: flex; flex-direction: column; gap: 14px; }
+  .co-form .co-row { display: flex; gap: 10px; align-items: flex-end; flex-wrap: wrap; }
+  .co-form .co-field { display: flex; flex-direction: column; flex: 1; min-width: 140px; }
+  .co-form .co-field label { font-size: 10px; font-weight: 600; color: #666; margin-bottom: 3px; text-transform: uppercase; letter-spacing: 0.5px; }
+  .co-form .co-field input, .co-form .co-field textarea, .co-form .co-field select {
+    padding: 7px 10px; border: 1px solid #ddd; border-radius: 6px; font-size: 12px; font-family: inherit; background: #fafbfc;
+  }
+  .co-form .co-field input:focus, .co-form .co-field textarea:focus { outline: none; border-color: #0f3460; background: white; }
+  .co-line-table { width: 100%; border-collapse: collapse; font-size: 11px; margin: 10px 0; }
+  .co-line-table th { background: #1a1a2e; color: white; padding: 8px 10px; font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; text-align: left; }
+  .co-line-table th:last-child { text-align: right; }
+  .co-line-table td { padding: 6px 10px; border-bottom: 1px solid #f0f0f0; }
+  .co-line-table input { width: 100%; padding: 5px 8px; border: 1px solid #e0e0e0; border-radius: 4px; font-size: 11px; font-family: inherit; }
+  .co-line-table input:focus { outline: none; border-color: #0f3460; }
+  .co-summary { display: grid; grid-template-columns: 1fr auto; gap: 4px 20px; font-size: 12px; padding: 14px 0; }
+  .co-summary .co-label { color: #666; text-align: right; }
+  .co-summary .co-val { font-weight: 700; color: #0f3460; text-align: right; font-variant-numeric: tabular-nums; min-width: 100px; }
+  .co-summary .co-val.highlight { font-size: 14px; border-top: 2px solid #0f3460; padding-top: 6px; }
+  .sig-upload-zone {
+    width: 220px; height: 80px; border: 2px dashed #ccc; border-radius: 8px; cursor: pointer;
+    display: flex; align-items: center; justify-content: center; transition: all 0.15s;
+    background: #fafbfc; overflow: hidden;
+  }
+  .sig-upload-zone:hover { border-color: #0f3460; background: #f0f4ff; }
+  .sig-upload-zone img { max-width: 100%; max-height: 100%; object-fit: contain; }
+
+  /* AIA Print */
+  .aia-doc { padding: 40px 50px; font-size: 11px; line-height: 1.5; color: #222; font-family: 'Inter', sans-serif; }
+  .aia-doc .aia-header { text-align: center; border-bottom: 3px double #333; padding-bottom: 10px; margin-bottom: 16px; }
+  .aia-doc .aia-header h2 { font-size: 18px; letter-spacing: 2px; margin-bottom: 2px; }
+  .aia-doc .aia-header .aia-sub { font-size: 10px; color: #666; }
+  .aia-doc .aia-meta { display: grid; grid-template-columns: auto 1fr; gap: 3px 14px; font-size: 11px; margin-bottom: 14px; }
+  .aia-doc .aia-meta .ml { font-weight: 700; color: #333; }
+  .aia-doc .aia-desc { margin: 12px 0; padding: 10px 14px; background: #f8f8f8; border-left: 3px solid #0f3460; font-size: 11px; white-space: pre-wrap; }
+  .aia-doc .aia-table { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 11px; }
+  .aia-doc .aia-table th { background: #eee; padding: 6px 10px; font-size: 10px; text-align: left; border: 1px solid #ccc; }
+  .aia-doc .aia-table th:nth-child(2), .aia-doc .aia-table th:nth-child(3) { text-align: right; }
+  .aia-doc .aia-table td { padding: 5px 10px; border: 1px solid #ddd; }
+  .aia-doc .aia-table td:nth-child(2), .aia-doc .aia-table td:nth-child(3) { text-align: right; font-variant-numeric: tabular-nums; }
+  .aia-doc .aia-sum { display: grid; grid-template-columns: 1fr auto; gap: 3px 20px; margin: 14px 0; font-size: 11px; }
+  .aia-doc .aia-sum .sl { text-align: right; color: #555; }
+  .aia-doc .aia-sum .sv { text-align: right; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .aia-doc .aia-sum .sv.total { font-size: 13px; font-weight: 700; color: #0f3460; border-top: 2px solid #333; padding-top: 4px; }
+  .aia-doc .aia-sigs { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 30px; margin-top: 24px; }
+  .aia-doc .aia-sigs .sig-block-aia { font-size: 10px; }
+  .aia-doc .aia-sigs .sig-block-aia .sig-img { height: 50px; margin-bottom: 4px; }
+  .aia-doc .aia-sigs .sig-block-aia .sig-line-aia { border-top: 1px solid #333; padding-top: 3px; margin-top: 4px; }
+
+  /* ── Media Gallery ──────────────────────── */
+  .media-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 14px; }
+  .media-card {
+    background: white; border-radius: 10px; border: 1px solid #e8eaed; overflow: hidden;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.06); transition: all 0.15s; position: relative;
+  }
+  .media-card:hover { border-color: #0f3460; box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
+  .media-card .media-thumb {
+    width: 100%; height: 160px; object-fit: cover; display: block; background: #f0f2f5;
+    cursor: pointer;
+  }
+  .media-card video.media-thumb { object-fit: contain; background: #000; }
+  .media-card .media-info { padding: 10px 12px; }
+  .media-card .media-name {
+    font-size: 12px; font-weight: 600; color: #1a1a2e; margin-bottom: 2px;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .media-card .media-note { font-size: 10px; color: #888; margin-bottom: 4px; line-height: 1.3; }
+  .media-card .media-date { font-size: 9px; color: #aaa; }
+  .media-card .media-actions {
+    display: flex; gap: 4px; position: absolute; top: 8px; right: 8px;
+  }
+  .media-card .media-actions button {
+    width: 26px; height: 26px; border-radius: 6px; border: none;
+    background: rgba(0,0,0,0.55); color: white; font-size: 13px; cursor: pointer;
+    display: flex; align-items: center; justify-content: center; transition: all 0.15s;
+    backdrop-filter: blur(4px);
+  }
+  .media-card .media-actions button:hover { background: rgba(0,0,0,0.8); }
+  .media-upload-zone {
+    border: 2px dashed #c0c8d4; border-radius: 10px; padding: 30px;
+    text-align: center; cursor: pointer; transition: all 0.2s; background: #fafbfc;
+    min-height: 160px; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  }
+  .media-upload-zone:hover { border-color: #0f3460; background: #f0f4ff; }
+  .media-upload-zone.drag-active { border-color: #27ae60; background: #eafaf0; }
+  .media-lightbox {
+    position: fixed; inset: 0; background: rgba(0,0,0,0.85); z-index: 200;
+    display: flex; align-items: center; justify-content: center; cursor: pointer;
+  }
+  .media-lightbox img, .media-lightbox video { max-width: 90vw; max-height: 90vh; border-radius: 8px; }
+  .media-lightbox .lb-close {
+    position: absolute; top: 20px; right: 20px; background: rgba(255,255,255,0.2);
+    border: none; color: white; font-size: 24px; width: 40px; height: 40px; border-radius: 20px;
+    cursor: pointer; display: flex; align-items: center; justify-content: center;
+  }
+  .media-lightbox .lb-close:hover { background: rgba(255,255,255,0.4); }
+  .media-edit-row { display: flex; gap: 6px; align-items: center; margin-top: 4px; }
+  .media-edit-row input {
+    flex: 1; padding: 4px 8px; border: 1px solid #ddd; border-radius: 4px;
+    font-size: 11px; font-family: inherit;
+  }
+  .media-edit-row input:focus { outline: none; border-color: #0f3460; }
+
+  /* ── Cloud / Auth UI ── */
+  .login-wrap { min-height: 100vh; display: flex; align-items: center; justify-content: center; background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%); padding: 20px; }
+  .login-card { background: white; border-radius: 14px; padding: 36px 32px; width: 100%; max-width: 380px; box-shadow: 0 20px 60px rgba(0,0,0,0.3); }
+  .login-card h2 { font-size: 22px; font-weight: 700; color: #1a1a2e; margin-bottom: 4px; }
+  .login-card .login-sub { font-size: 12px; color: #888; margin-bottom: 24px; }
+  .login-card .field { margin-bottom: 14px; }
+  .login-card .field label { display: block; font-size: 10px; font-weight: 600; color: #666; margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.5px; }
+  .login-card .field input { width: 100%; padding: 10px 12px; border: 1px solid #ddd; border-radius: 8px; font-size: 14px; font-family: inherit; background: #fafbfc; }
+  .login-card .field input:focus { outline: none; border-color: #0f3460; background: white; }
+
+  .cloud-btn { padding: 8px 14px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.3); background: rgba(80,200,120,0.25); color: white; font-size: 12px; cursor: pointer; font-weight: 600; transition: all 0.15s; font-family: inherit; }
+  .cloud-btn:hover { background: rgba(80,200,120,0.45); }
+  .cloud-btn.share { background: rgba(100,150,240,0.25); }
+  .cloud-btn.share:hover { background: rgba(100,150,240,0.45); }
+  .cloud-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+  .cloud-list { display: flex; flex-direction: column; gap: 10px; }
+  .cloud-item { background: white; border: 1px solid #e8eaed; border-radius: 10px; padding: 14px 18px; display: flex; justify-content: space-between; align-items: center; transition: all 0.15s; box-shadow: 0 1px 3px rgba(0,0,0,0.04); }
+  .cloud-item:hover { border-color: #0f3460; box-shadow: 0 2px 8px rgba(15,52,96,0.1); }
+  .cloud-item-info { flex: 1; min-width: 0; }
+  .cloud-item-title { font-size: 14px; font-weight: 700; color: #1a1a2e; margin-bottom: 3px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .cloud-item-meta { font-size: 11px; color: #777; display: flex; gap: 12px; flex-wrap: wrap; }
+  .cloud-item-meta span { display: inline-flex; align-items: center; gap: 3px; }
+  .cloud-item-actions { display: flex; gap: 6px; flex-shrink: 0; }
+  .cloud-item-actions button { padding: 7px 12px; border-radius: 6px; border: 1px solid #ddd; background: white; font-size: 11px; font-weight: 600; cursor: pointer; font-family: inherit; transition: all 0.15s; }
+  .cloud-item-actions .open-btn { background: #0f3460; color: white; border-color: #0f3460; }
+  .cloud-item-actions .open-btn:hover { background: #16213e; }
+  .cloud-item-actions .share-btn:hover { background: #e8f0ff; border-color: #0f3460; color: #0f3460; }
+  .cloud-item-actions .del-btn:hover { background: #fee; border-color: #e74c3c; color: #e74c3c; }
+  .cloud-empty { text-align: center; padding: 40px 20px; color: #999; font-size: 13px; }
+  .cloud-loading { text-align: center; padding: 30px; color: #666; font-size: 13px; }
+  .toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%); background: #1a1a2e; color: white; padding: 12px 22px; border-radius: 8px; font-size: 13px; font-weight: 500; box-shadow: 0 8px 24px rgba(0,0,0,0.3); z-index: 9999; animation: toastIn 0.25s ease-out; }
+  @keyframes toastIn { from { opacity: 0; transform: translate(-50%, 10px); } to { opacity: 1; transform: translate(-50%, 0); } }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const { useState, useRef, useEffect, useCallback } = React;
+
+const CSI_DIVISIONS = [
+  { code: "01", name: "General Requirements" }, { code: "02", name: "Existing Conditions" },
+  { code: "03", name: "Concrete" }, { code: "04", name: "Masonry" },
+  { code: "05", name: "Metals" }, { code: "06", name: "Wood, Plastics & Comp" },
+  { code: "07", name: "Thermal & Moisture" }, { code: "08", name: "Openings" },
+  { code: "09", name: "Finishes" }, { code: "10", name: "Specialties" },
+  { code: "11", name: "Equipment" }, { code: "12", name: "Furnishings" },
+  { code: "13", name: "Special Construction" }, { code: "14", name: "Conveying Equipment" },
+  { code: "21", name: "Fire Suppression" }, { code: "22", name: "Plumbing" },
+  { code: "23", name: "HVAC" }, { code: "25", name: "Integrated Automation" },
+  { code: "26", name: "Electrical" }, { code: "27", name: "Communications" },
+  { code: "28", name: "Electronic Safety" }, { code: "31", name: "Earthwork" },
+  { code: "32", name: "Exterior Improvements" }, { code: "33", name: "Utilities" },
+];
+
+const LABOR_RATES = [
+  { trade: "Laborer", st: 75, ot: 112.5 },
+  { trade: "Carpenter", st: 95, ot: 142.5 },
+  { trade: "Superintendent", st: 213.75, ot: 142.5 },
+  { trade: "Painter", st: 95, ot: 142.5 },
+  { trade: "FP", st: 110, ot: 165 },
+  { trade: "Plumber", st: 110, ot: 165 },
+  { trade: "HVAC", st: 110, ot: 165 },
+  { trade: "Electrician", st: 115, ot: 172.5 },
+  { trade: "Low Voltage", st: 115, ot: 172.5 },
+];
+
+const DEFAULT_QUALS = [
+  { text: "Proposal valid for 30 days.", subs: [] },
+  { text: "Only for work specifically noted.", subs: [] },
+  { text: "Non-union labor is included.", subs: [] },
+  { text: "Workers to be able to use the existing and/or mall washroom facilities.", subs: [] },
+  { text: "Unless noted otherwise, no building owner or property owner required subcontractors are included.", subs: [] },
+  { text: "Sales tax on material installed is included.", subs: [] },
+  { text: "Location specific qualifications:", subs: [ "Debris to be placed in owner provided dumpsters.", "Work to be completed on off hours or weekends." ] },
+];
+const DEFAULT_EXCL = [
+  { text: "Permit fees, bonds, license fees, or permit administration time for permit are excluded.", subs: [] },
+  { text: "Union labor.", subs: [] },
+  { text: "Directing or coordination with owner hired contractors is excluded.", subs: [] },
+  { text: "On site or property owner safety training is excluded.", subs: [] },
+  { text: "No special procedures for entrance and exit of the facility.", subs: [] },
+  { text: "Local, county, or state usage tax on capital improvements.", subs: [] },
+  { text: "Location specific exclusions:", subs: [ "Night or weekend work." ] },
+];
+
+const TAKEOFF_COLORS = ["#e74c3c","#3498db","#27ae60","#f39c12","#9b59b6","#1abc9c","#e67e22","#2c3e50","#e91e63","#00bcd4"];
+
+const fmt = (n) => { if (isNaN(n) || n === 0) return "$0.00"; return "$" + n.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ","); };
+const uid = () => Math.random().toString(36).slice(2, 10);
+const deepCopy = (a) => JSON.parse(JSON.stringify(a));
+const bufferToBase64 = (buf) => { const b = new Uint8Array(buf); let s = ""; for (let i = 0; i < b.length; i++) s += String.fromCharCode(b[i]); return btoa(s); };
+const base64ToBuffer = (b64) => { const s = atob(b64); const b = new Uint8Array(s.length); for (let i = 0; i < s.length; i++) b[i] = s.charCodeAt(i); return b.buffer; };
+
+// ═══════════════════════════════════════════════════════════════
+// FIREBASE INITIALIZATION
+// ═══════════════════════════════════════════════════════════════
+const firebaseConfig = {
+  apiKey: "AIzaSyC1Zfpio6F25b8-x_VLxBa-KHdO1r8R4ZI",
+  authDomain: "project-general-estimator.firebaseapp.com",
+  databaseURL: "https://project-general-estimator-default-rtdb.firebaseio.com/",
+  projectId: "project-general-estimator",
+  storageBucket: "project-general-estimator.firebasestorage.app",
+  messagingSenderId: "886489092736",
+  appId: "1:886489092736:web:e9465feddf087498a0cc65",
+};
+let fbApp = null, fbAuth = null, fbDb = null, fbStorage = null;
+try {
+  if (window.firebase) {
+    fbApp = window.firebase.apps.length ? window.firebase.app() : window.firebase.initializeApp(firebaseConfig);
+    fbAuth = window.firebase.auth();
+    fbDb = window.firebase.database();
+    fbStorage = window.firebase.storage();
+  }
+} catch (e) { console.error("Firebase init failed:", e); }
+
+// ═══════════════════════════════════════════════════════════════
+// VERSION MIGRATION SYSTEM — old files never break
+// ═══════════════════════════════════════════════════════════════
+const CURRENT_VERSION = 6;
+const MIGRATIONS = {
+  2: (d) => {
+    if (d.lines) d.lines.forEach(l => { if (!l.subItems) l.subItems = []; if (l.expanded === undefined) l.expanded = false; });
+    return d;
+  },
+  3: (d) => {
+    const mig = (item) => {
+      if (item.laborCost !== undefined && item.laborTrade === undefined) {
+        item.laborTrade = ""; item.laborRate = 0; item.laborSTHours = 0; item.laborOTHours = 0; item.laborOTPct = 50;
+      }
+      if (item.taxable === undefined) item.taxable = true;
+    };
+    if (d.lines) d.lines.forEach(l => { mig(l); if (l.subItems) l.subItems.forEach(mig); });
+    return d;
+  },
+  4: (d) => {
+    if (!d.proposals) d.proposals = [];
+    if (!d.receipts) d.receipts = [];
+    if (!d.sitePhotos) d.sitePhotos = [];
+    if (!d.subBids) d.subBids = [];
+    return d;
+  },
+  5: (d) => {
+    if (!d.estimates && d.lines) {
+      d.estimates = [{
+        id: "est_" + Math.random().toString(36).slice(2, 10),
+        name: "Primary Estimate",
+        lines: d.lines, qualifications: d.qualifications || [], exclusions: d.exclusions || [], closingNote: d.closingNote || "",
+      }];
+      delete d.lines; delete d.qualifications; delete d.exclusions; delete d.closingNote;
+    } else if (!d.estimates) d.estimates = [];
+    if (!d.changeOrders) d.changeOrders = [];
+    if (d.signatureImg === undefined) d.signatureImg = null;
+    return d;
+  },
+  6: (d) => {
+    if (!d._cloudMeta) d._cloudMeta = { createdAt: Date.now(), updatedAt: Date.now() };
+    return d;
+  },
+};
+const migrateProject = (data) => {
+  if (!data) return data;
+  let d = { ...data };
+  const fromVersion = d._version || 1;
+  for (let v = fromVersion + 1; v <= CURRENT_VERSION; v++) {
+    if (MIGRATIONS[v]) { try { d = MIGRATIONS[v](d); } catch (e) { console.warn("Migration v" + v + " failed:", e); } }
+  }
+  d._version = CURRENT_VERSION;
+  return d;
+};
+
+// ═══════════════════════════════════════════════════════════════
+// CLOUD HELPERS
+// ═══════════════════════════════════════════════════════════════
+const cleanForFirebase = (obj) => JSON.parse(JSON.stringify(obj, (k, v) => v === undefined ? null : v));
+
+// Data model:
+//   publicEstimates/{id}  — full estimate data, publicly readable so share links work
+//                            writable only by the owner (enforced by DB rules)
+//   userIndex/{uid}/{id}  — per-user list of their own estimates (private to that user)
+const cloudSave = async (id, projectData, userId) => {
+  if (!fbDb) throw new Error("Firebase not initialized");
+  if (!userId) throw new Error("Not signed in");
+  const now = Date.now();
+  const payload = cleanForFirebase({
+    ...projectData,
+    _version: CURRENT_VERSION,
+    _cloudMeta: {
+      createdAt: (projectData._cloudMeta && projectData._cloudMeta.createdAt) || now,
+      updatedAt: now, ownerId: userId,
+    },
+  });
+  await fbDb.ref("publicEstimates/" + id).set(payload);
+  await fbDb.ref("userIndex/" + userId + "/" + id).set(cleanForFirebase({
+    id, updatedAt: now,
+    createdAt: payload._cloudMeta.createdAt,
+    estimateNum: (projectData.project && projectData.project.estimateNum) || "",
+    clientName: (projectData.project && projectData.project.clientName) || "",
+    projectName: (projectData.project && projectData.project.projectName) || "",
+    location: (projectData.project && projectData.project.location) || "",
+    date: (projectData.project && projectData.project.date) || "",
+    companyName: (projectData.settings && projectData.settings.companyName) || "",
+    ownerId: userId,
+  }));
+  return id;
+};
+
+const cloudLoad = async (id) => {
+  if (!fbDb) throw new Error("Firebase not initialized");
+  const snap = await fbDb.ref("publicEstimates/" + id).once("value");
+  if (!snap.exists()) return null;
+  return migrateProject(snap.val());
+};
+
+// Lists only the signed-in user's own estimates
+const cloudList = async (userId) => {
+  if (!fbDb) throw new Error("Firebase not initialized");
+  if (!userId) return [];
+  const snap = await fbDb.ref("userIndex/" + userId).once("value");
+  if (!snap.exists()) return [];
+  const val = snap.val() || {};
+  return Object.values(val).sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+};
+
+const cloudDelete = async (id, userId) => {
+  if (!fbDb) throw new Error("Firebase not initialized");
+  if (!userId) throw new Error("Not signed in");
+  await fbDb.ref("publicEstimates/" + id).remove();
+  await fbDb.ref("userIndex/" + userId + "/" + id).remove();
+};
+
+const makeShortId = () => Math.random().toString(36).slice(2, 10) + Math.random().toString(36).slice(2, 10);
+
+// Upload a File to Firebase Storage, return the public download URL
+const storageUpload = async (storagePath, file) => {
+  if (!fbStorage) throw new Error("Firebase Storage not initialized");
+  const ref = fbStorage.ref(storagePath);
+  const snap = await ref.put(file);
+  return await snap.ref.getDownloadURL();
+};
+
+const copyToClipboard = (text) => {
+  if (navigator.clipboard) return navigator.clipboard.writeText(text);
+  const ta = document.createElement("textarea");
+  ta.value = text; document.body.appendChild(ta); ta.select();
+  document.execCommand("copy"); document.body.removeChild(ta);
+};
+
+// Default line/sub item shape
+const newLineItem = () => ({
+  id: uid(), workCode: "", description: "", csiDiv: "01",
+  materialCost: 0, taxable: true,
+  laborTrade: "", laborRate: 0, laborSTHours: 0, laborOTHours: 0, laborOTPct: 50,
+  qty: 1, unit: "EA", link: "",
+  subItems: [], expanded: false,
+});
+const newSubItem = () => ({
+  id: uid(), description: "",
+  materialCost: 0, taxable: true,
+  laborTrade: "", laborRate: 0, laborSTHours: 0, laborOTHours: 0, laborOTPct: 50,
+  qty: 1, unit: "EA",
+});
+
+// Compute labor cost: (rate × ST hours) + (rate × (1 + OT%) × OT hours)
+const getLaborCost = (item) => {
+  const rate = parseFloat(item.laborRate) || 0;
+  const stH = parseFloat(item.laborSTHours) || 0;
+  const otH = parseFloat(item.laborOTHours) || 0;
+  const otPct = parseFloat(item.laborOTPct) || 50;
+  return (rate * stH) + (rate * (1 + otPct / 100) * otH);
+};
+
+/* ── Section Editor ───── */
+function SectionEditor({ title, items, onChange, color }) {
+  const update = (idx, field, value) => { const next = deepCopy(items); if (field === "text") next[idx].text = value; onChange(next); };
+  const updateSub = (idx, si, value) => { const next = deepCopy(items); next[idx].subs[si] = value; onChange(next); };
+  const addItem = () => onChange([...deepCopy(items), { text: "", subs: [] }]);
+  const removeItem = (idx) => { const next = deepCopy(items); next.splice(idx, 1); onChange(next); };
+  const addSub = (idx) => { const next = deepCopy(items); next[idx].subs.push(""); onChange(next); };
+  const removeSub = (idx, si) => { const next = deepCopy(items); next[idx].subs.splice(si, 1); onChange(next); };
+  const moveItem = (idx, dir) => { const next = deepCopy(items); const t = idx + dir; if (t < 0 || t >= next.length) return; [next[idx], next[t]] = [next[t], next[idx]]; onChange(next); };
+  const autoResize = (e) => { e.target.style.height = "auto"; e.target.style.height = e.target.scrollHeight + "px"; };
+  const ALPHA = "abcdefghijklmnopqrstuvwxyz";
+  return (
+    <div className="section-editor">
+      <div className="section-editor-title"><span style={{ color }}>{title}</span><button className="btn-sm" onClick={addItem}>+ Add Item</button></div>
+      {items.map((item, idx) => (
+        <div key={idx}>
+          <div className="item-row">
+            <span className="item-num">{idx + 1}.</span>
+            <div className="item-text"><textarea value={item.text} onChange={e => update(idx, "text", e.target.value)} onInput={autoResize} placeholder="Enter item text..." rows={1} /></div>
+            <div className="item-btns">
+              <button className="btn-sm" onClick={() => moveItem(idx, -1)}>&#9650;</button>
+              <button className="btn-sm" onClick={() => moveItem(idx, 1)}>&#9660;</button>
+              <button className="btn-sm" onClick={() => addSub(idx)}>a.)</button>
+              <button className="btn-sm del" onClick={() => removeItem(idx)}>&#10005;</button>
+            </div>
+          </div>
+          {item.subs.length > 0 && <div className="sub-items">{item.subs.map((sub, si) => (
+            <div className="sub-row" key={si}>
+              <span className="sub-label">{ALPHA[si] || "?"}.) </span>
+              <textarea value={sub} onChange={e => updateSub(idx, si, e.target.value)} onInput={autoResize} placeholder="Sub-item text..." rows={1} />
+              <button className="btn-sm del" onClick={() => removeSub(idx, si)} style={{ marginTop: 3 }}>&#10005;</button>
+            </div>
+          ))}</div>}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/* ── Change Order (AIA G701 Format) ────────────────── */
+function ChangeOrderPage({ changeOrders, setChangeOrders, settings, project, signatureImg, setSignatureImg }) {
+  const [activeCoId, setActiveCoId] = useState(null);
+  const [showPreview, setShowPreview] = useState(false);
+  const sigInputRef = useRef(null);
+
+  const addCO = () => {
+    const num = changeOrders.length + 1;
+    const co = {
+      id: uid(), coNumber: String(num).padStart(3, "0"),
+      date: new Date().toISOString().slice(0, 10),
+      projectName: project.projectName, projectLocation: project.location,
+      owner: project.clientName, architect: "", contractor: settings.companyName,
+      contractDate: "", contractFor: "",
+      description: "",
+      items: [{ id: uid(), description: "", addition: 0, deduction: 0 }],
+      originalContractSum: 0, prevChangeOrdersNet: 0,
+      originalContractDays: 0, prevTimeDays: 0, thisTimeDays: 0,
+      notes: "",
+    };
+    setChangeOrders(prev => [...prev, co]);
+    setActiveCoId(co.id);
+  };
+
+  const updateCO = (id, field, value) => setChangeOrders(prev => prev.map(c => c.id === id ? { ...c, [field]: value } : c));
+  const removeCO = (id) => { if (confirm("Delete this change order?")) { setChangeOrders(prev => prev.filter(c => c.id !== id)); if (activeCoId === id) setActiveCoId(null); } };
+  const addItem = (coId) => setChangeOrders(prev => prev.map(c => c.id === coId ? { ...c, items: [...c.items, { id: uid(), description: "", addition: 0, deduction: 0 }] } : c));
+  const updateItem = (coId, itemId, field, value) => setChangeOrders(prev => prev.map(c => c.id === coId ? { ...c, items: c.items.map(i => i.id === itemId ? { ...i, [field]: value } : i) } : c));
+  const removeItem = (coId, itemId) => setChangeOrders(prev => prev.map(c => c.id === coId ? { ...c, items: c.items.filter(i => i.id !== itemId) } : c));
+
+  const co = changeOrders.find(c => c.id === activeCoId);
+
+  const getNetChange = (co) => co.items.reduce((s, i) => s + (parseFloat(i.addition) || 0) - (parseFloat(i.deduction) || 0), 0);
+  const getNewContractSum = (co) => (parseFloat(co.originalContractSum) || 0) + (parseFloat(co.prevChangeOrdersNet) || 0) + getNetChange(co);
+
+  const handleSigUpload = (e) => {
+    const file = e.target.files[0]; if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => setSignatureImg(ev.target.result);
+    reader.readAsDataURL(file);
+  };
+
+  const printCO = () => {
+    if (!co) return;
+    const netChange = getNetChange(co);
+    const newSum = getNewContractSum(co);
+    const newDays = (parseFloat(co.originalContractDays)||0) + (parseFloat(co.prevTimeDays)||0) + (parseFloat(co.thisTimeDays)||0);
+    const today = new Date().toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
+
+    let itemsHTML = co.items.filter(i => i.description).map(i =>
+      `<tr><td>${i.description}</td><td>${(parseFloat(i.addition)||0) > 0 ? fmt(parseFloat(i.addition)) : ""}</td><td>${(parseFloat(i.deduction)||0) > 0 ? fmt(parseFloat(i.deduction)) : ""}</td></tr>`
+    ).join("");
+
+    const sigHTML = signatureImg ? `<img src="${signatureImg}" class="sig-img" style="height:50px;"/>` : "";
+
+    const win = window.open("", "_blank");
+    win.document.write(`<!DOCTYPE html><html><head><title>Change Order ${co.coNumber}</title>
+    <style>
+      @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
+      * { margin:0; padding:0; box-sizing:border-box; }
+      body { font-family:'Inter',sans-serif; padding:40px 50px; font-size:11px; color:#222; line-height:1.5; }
+      @media print { @page { margin:0.5in; size:letter; } body { padding:0; } .no-print { display:none!important; } }
+      .hdr { text-align:center; border-bottom:3px double #333; padding-bottom:10px; margin-bottom:16px; }
+      .hdr h2 { font-size:18px; letter-spacing:2px; }
+      .hdr .sub { font-size:10px; color:#666; }
+      .meta { display:grid; grid-template-columns:auto 1fr auto 1fr; gap:3px 14px; font-size:11px; margin-bottom:14px; }
+      .meta .ml { font-weight:700; }
+      .desc { margin:12px 0; padding:10px 14px; background:#f8f8f8; border-left:3px solid #0f3460; white-space:pre-wrap; }
+      table { width:100%; border-collapse:collapse; margin:12px 0; font-size:11px; }
+      th { background:#eee; padding:6px 10px; font-size:10px; text-align:left; border:1px solid #ccc; }
+      th:nth-child(2),th:nth-child(3) { text-align:right; }
+      td { padding:5px 10px; border:1px solid #ddd; }
+      td:nth-child(2),td:nth-child(3) { text-align:right; font-variant-numeric:tabular-nums; }
+      .sum { display:grid; grid-template-columns:1fr auto; gap:3px 20px; margin:14px 0; }
+      .sl { text-align:right; color:#555; }
+      .sv { text-align:right; font-weight:600; font-variant-numeric:tabular-nums; }
+      .sv.total { font-size:13px; font-weight:700; color:#0f3460; border-top:2px solid #333; padding-top:4px; }
+      .sigs { display:grid; grid-template-columns:1fr 1fr 1fr; gap:30px; margin-top:30px; font-size:10px; }
+      .sig-l { border-top:1px solid #333; padding-top:3px; margin-top:4px; }
+      .sig-img { height:50px; display:block; margin-bottom:2px; }
+    </style></head><body>
+    <div class="no-print" style="margin-bottom:16px;"><button onclick="window.print()" style="padding:10px 24px;background:#27ae60;color:white;border:none;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer;">Print / Save PDF</button></div>
+    <div class="hdr"><h2>CHANGE ORDER</h2><div class="sub">AIA Document G701 Format</div></div>
+    <div class="meta">
+      <span class="ml">Change Order No:</span><span>${co.coNumber}</span>
+      <span class="ml">Date:</span><span>${co.date ? new Date(co.date+"T12:00:00").toLocaleDateString("en-US",{year:"numeric",month:"long",day:"numeric"}) : today}</span>
+      <span class="ml">Project:</span><span>${co.projectName}</span>
+      <span class="ml">Location:</span><span>${co.projectLocation}</span>
+      <span class="ml">Owner:</span><span>${co.owner}</span>
+      <span class="ml">Architect:</span><span>${co.architect}</span>
+      <span class="ml">Contractor:</span><span>${co.contractor}</span>
+      <span class="ml">Contract Date:</span><span>${co.contractDate}</span>
+      <span class="ml">Contract For:</span><span colspan="3">${co.contractFor}</span>
+    </div>
+    <div style="font-weight:700;font-size:11px;margin:10px 0 4px;">The Contract is changed as follows:</div>
+    <div class="desc">${co.description || "(No description provided)"}</div>
+    <table><thead><tr><th>Description</th><th style="width:100px">Addition</th><th style="width:100px">Deduction</th></tr></thead><tbody>${itemsHTML}</tbody></table>
+    <div class="sum">
+      <span class="sl">Original Contract Sum:</span><span class="sv">${fmt(parseFloat(co.originalContractSum)||0)}</span>
+      <span class="sl">Net Change by Previous Change Orders:</span><span class="sv">${fmt(parseFloat(co.prevChangeOrdersNet)||0)}</span>
+      <span class="sl">Contract Sum Prior to This Change Order:</span><span class="sv">${fmt((parseFloat(co.originalContractSum)||0)+(parseFloat(co.prevChangeOrdersNet)||0))}</span>
+      <span class="sl">Net Change of This Change Order:</span><span class="sv">${fmt(netChange)}</span>
+      <span class="sl">New Contract Sum Including This Change Order:</span><span class="sv total">${fmt(newSum)}</span>
+    </div>
+    <div class="sum" style="margin-top:16px;">
+      <span class="sl">Original Contract Time (days):</span><span class="sv">${co.originalContractDays||0}</span>
+      <span class="sl">Net Change from Previous Change Orders (days):</span><span class="sv">${co.prevTimeDays||0}</span>
+      <span class="sl">Change in Contract Time for This Change Order (days):</span><span class="sv">${co.thisTimeDays||0}</span>
+      <span class="sl">New Date of Substantial Completion (days):</span><span class="sv" style="font-weight:700;">${newDays}</span>
+    </div>
+    ${co.notes ? `<div style="margin-top:14px;font-size:10px;color:#555;"><strong>Notes:</strong> ${co.notes}</div>` : ""}
+    <div class="sigs">
+      <div><div style="font-weight:700;margin-bottom:20px;">OWNER</div><div class="sig-l">Signature</div><div class="sig-l" style="margin-top:16px;">Date</div></div>
+      <div><div style="font-weight:700;margin-bottom:20px;">ARCHITECT</div><div class="sig-l">Signature</div><div class="sig-l" style="margin-top:16px;">Date</div></div>
+      <div><div style="font-weight:700;margin-bottom:20px;">CONTRACTOR</div>${sigHTML}<div class="sig-l">Signature</div><div style="font-size:10px;color:#666;margin-top:2px;">${today}</div><div class="sig-l" style="margin-top:10px;">Date</div></div>
+    </div>
+    </body></html>`);
+    win.document.close();
+  };
+
+  return (
+    <div>
+      {/* CO List + Editor */}
+      <div className="card">
+        <div className="card-title">
+          <span>Change Orders (AIA G701)</span>
+          <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+            <span style={{ fontWeight: 400, textTransform: "none", letterSpacing: 0, fontSize: 10, color: "#888" }}>{changeOrders.length} CO{changeOrders.length !== 1 ? "s" : ""}</span>
+            <button onClick={addCO}>+ New CO</button>
+          </div>
+        </div>
+        {changeOrders.length > 0 && (
+          <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 14 }}>
+            {changeOrders.map(c => (
+              <button key={c.id} className="btn-sm"
+                onClick={() => setActiveCoId(c.id)}
+                style={activeCoId === c.id ? { background: "#0f3460", color: "white", borderColor: "#0f3460" } : {}}>
+                CO-{c.coNumber} {c.date && `(${c.date})`}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Signature Upload */}
+      <div className="card" style={{ padding: 14 }}>
+        <div className="card-title" style={{ marginBottom: 8 }}><span>Your Signature</span></div>
+        <div style={{ display: "flex", gap: 14, alignItems: "center" }}>
+          <div className="sig-upload-zone" onClick={() => sigInputRef.current && sigInputRef.current.click()}>
+            <input ref={sigInputRef} type="file" accept="image/*" style={{ display: "none" }} onChange={handleSigUpload} />
+            {signatureImg ? <img src={signatureImg} alt="Signature" /> : <span style={{ fontSize: 11, color: "#aaa" }}>Click to upload signature</span>}
+          </div>
+          {signatureImg && <button className="btn-sm del" onClick={() => setSignatureImg(null)}>Remove</button>}
+          <span style={{ fontSize: 10, color: "#888" }}>Upload a PNG or photo of your signature. It will be placed on printed change orders and auto-dated.</span>
+        </div>
+      </div>
+
+      {/* Active CO Editor */}
+      {co ? (
+        <div className="card">
+          <div className="card-title">
+            <span>Editing CO-{co.coNumber}</span>
+            <div style={{ display: "flex", gap: 6 }}>
+              <button onClick={printCO} style={{ background: "#27ae60", color: "white", borderColor: "#27ae60" }}>Print / Save PDF</button>
+              <button onClick={() => setShowPreview(!showPreview)}>{showPreview ? "Edit" : "Preview"}</button>
+              <button onClick={() => removeCO(co.id)} style={{ color: "#c0392b", borderColor: "#f5c6cb" }}>Delete</button>
+            </div>
+          </div>
+
+          {!showPreview ? (
+            <div className="co-form">
+              <div className="co-row">
+                <div className="co-field"><label>CO Number</label><input value={co.coNumber} onChange={e => updateCO(co.id, "coNumber", e.target.value)} /></div>
+                <div className="co-field"><label>Date</label><input type="date" value={co.date} onChange={e => updateCO(co.id, "date", e.target.value)} /></div>
+                <div className="co-field"><label>Contract Date</label><input type="date" value={co.contractDate} onChange={e => updateCO(co.id, "contractDate", e.target.value)} /></div>
+              </div>
+              <div className="co-row">
+                <div className="co-field"><label>Project</label><input value={co.projectName} onChange={e => updateCO(co.id, "projectName", e.target.value)} /></div>
+                <div className="co-field"><label>Location</label><input value={co.projectLocation} onChange={e => updateCO(co.id, "projectLocation", e.target.value)} /></div>
+              </div>
+              <div className="co-row">
+                <div className="co-field"><label>Owner</label><input value={co.owner} onChange={e => updateCO(co.id, "owner", e.target.value)} /></div>
+                <div className="co-field"><label>Architect</label><input value={co.architect} onChange={e => updateCO(co.id, "architect", e.target.value)} /></div>
+                <div className="co-field"><label>Contractor</label><input value={co.contractor} onChange={e => updateCO(co.id, "contractor", e.target.value)} /></div>
+              </div>
+              <div className="co-row">
+                <div className="co-field" style={{ flex: "1 1 100%" }}><label>Contract For</label><input value={co.contractFor} onChange={e => updateCO(co.id, "contractFor", e.target.value)} placeholder="e.g. General Construction" /></div>
+              </div>
+              <div className="co-field">
+                <label>Description of Change</label>
+                <textarea value={co.description} onChange={e => updateCO(co.id, "description", e.target.value)} rows={3} placeholder="Describe the change in scope, materials, or conditions..." style={{ resize: "vertical", minHeight: 60 }} />
+              </div>
+
+              {/* Line items */}
+              <div>
+                <div style={{ fontSize: 10, fontWeight: 700, color: "#0f3460", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 6 }}>Change Items</div>
+                <table className="co-line-table">
+                  <thead><tr><th>Description</th><th style={{ width: 100, textAlign: "right" }}>Addition</th><th style={{ width: 100, textAlign: "right" }}>Deduction</th><th style={{ width: 30 }}></th></tr></thead>
+                  <tbody>{co.items.map(item => (
+                    <tr key={item.id}>
+                      <td><input value={item.description} onChange={e => updateItem(co.id, item.id, "description", e.target.value)} placeholder="Item description" /></td>
+                      <td><input type="number" min="0" step="0.01" value={item.addition || ""} onChange={e => updateItem(co.id, item.id, "addition", e.target.value)} placeholder="0.00" style={{ textAlign: "right" }} /></td>
+                      <td><input type="number" min="0" step="0.01" value={item.deduction || ""} onChange={e => updateItem(co.id, item.id, "deduction", e.target.value)} placeholder="0.00" style={{ textAlign: "right" }} /></td>
+                      <td><button className="remove-btn" onClick={() => removeItem(co.id, item.id)} style={{ fontSize: 13 }}>×</button></td>
+                    </tr>
+                  ))}</tbody>
+                </table>
+                <button className="btn-sm" onClick={() => addItem(co.id)} style={{ marginTop: 4 }}>+ Add Item</button>
+              </div>
+
+              {/* Contract sums */}
+              <div className="co-row">
+                <div className="co-field"><label>Original Contract Sum</label><input type="number" min="0" step="0.01" value={co.originalContractSum || ""} onChange={e => updateCO(co.id, "originalContractSum", e.target.value)} placeholder="0.00" /></div>
+                <div className="co-field"><label>Net Change by Previous COs</label><input type="number" step="0.01" value={co.prevChangeOrdersNet || ""} onChange={e => updateCO(co.id, "prevChangeOrdersNet", e.target.value)} placeholder="0.00" /></div>
+              </div>
+
+              <div className="co-summary">
+                <span className="co-label">Net Change This CO:</span><span className="co-val">{fmt(getNetChange(co))}</span>
+                <span className="co-label">New Contract Sum:</span><span className="co-val highlight">{fmt(getNewContractSum(co))}</span>
+              </div>
+
+              {/* Contract time */}
+              <div className="co-row">
+                <div className="co-field"><label>Original Contract Time (days)</label><input type="number" min="0" value={co.originalContractDays || ""} onChange={e => updateCO(co.id, "originalContractDays", e.target.value)} /></div>
+                <div className="co-field"><label>Previous CO Time Change (days)</label><input type="number" value={co.prevTimeDays || ""} onChange={e => updateCO(co.id, "prevTimeDays", e.target.value)} /></div>
+                <div className="co-field"><label>This CO Time Change (days)</label><input type="number" value={co.thisTimeDays || ""} onChange={e => updateCO(co.id, "thisTimeDays", e.target.value)} /></div>
+              </div>
+
+              <div className="co-field"><label>Notes</label><textarea value={co.notes} onChange={e => updateCO(co.id, "notes", e.target.value)} rows={2} placeholder="Additional notes..." /></div>
+            </div>
+          ) : (
+            /* Preview */
+            <div className="aia-doc">
+              <div className="aia-header"><h2>CHANGE ORDER</h2><div className="aia-sub">AIA Document G701 Format</div></div>
+              <div className="aia-meta">
+                <span className="ml">Change Order No:</span><span>{co.coNumber}</span>
+                <span className="ml">Date:</span><span>{co.date ? new Date(co.date+"T12:00:00").toLocaleDateString("en-US",{year:"numeric",month:"long",day:"numeric"}) : ""}</span>
+                <span className="ml">Project:</span><span>{co.projectName}</span>
+                <span className="ml">Location:</span><span>{co.projectLocation}</span>
+                <span className="ml">Owner:</span><span>{co.owner}</span>
+                <span className="ml">Architect:</span><span>{co.architect}</span>
+                <span className="ml">Contractor:</span><span>{co.contractor}</span>
+                <span className="ml">Contract Date:</span><span>{co.contractDate}</span>
+                <span className="ml">Contract For:</span><span>{co.contractFor}</span>
+              </div>
+              <div style={{ fontWeight: 700, marginBottom: 4 }}>The Contract is changed as follows:</div>
+              <div className="aia-desc">{co.description || "(No description)"}</div>
+              <table className="aia-table"><thead><tr><th>Description</th><th style={{ width: 100 }}>Addition</th><th style={{ width: 100 }}>Deduction</th></tr></thead>
+                <tbody>{co.items.filter(i => i.description).map(i => (
+                  <tr key={i.id}><td>{i.description}</td><td>{(parseFloat(i.addition)||0) > 0 ? fmt(parseFloat(i.addition)) : ""}</td><td>{(parseFloat(i.deduction)||0) > 0 ? fmt(parseFloat(i.deduction)) : ""}</td></tr>
+                ))}</tbody></table>
+              <div className="aia-sum">
+                <span className="sl">Original Contract Sum:</span><span className="sv">{fmt(parseFloat(co.originalContractSum)||0)}</span>
+                <span className="sl">Net Change by Previous COs:</span><span className="sv">{fmt(parseFloat(co.prevChangeOrdersNet)||0)}</span>
+                <span className="sl">Contract Sum Prior to This CO:</span><span className="sv">{fmt((parseFloat(co.originalContractSum)||0)+(parseFloat(co.prevChangeOrdersNet)||0))}</span>
+                <span className="sl">Net Change This CO:</span><span className="sv">{fmt(getNetChange(co))}</span>
+                <span className="sl">New Contract Sum:</span><span className="sv total">{fmt(getNewContractSum(co))}</span>
+              </div>
+              <div className="aia-sigs">
+                <div><div style={{ fontWeight: 700, marginBottom: 30 }}>OWNER</div><div className="sig-line-aia" style={{ borderTop: "1px solid #333", paddingTop: 3 }}>Signature / Date</div></div>
+                <div><div style={{ fontWeight: 700, marginBottom: 30 }}>ARCHITECT</div><div className="sig-line-aia" style={{ borderTop: "1px solid #333", paddingTop: 3 }}>Signature / Date</div></div>
+                <div><div style={{ fontWeight: 700, marginBottom: 6 }}>CONTRACTOR</div>{signatureImg && <img src={signatureImg} style={{ height: 50 }} />}<div style={{ borderTop: "1px solid #333", paddingTop: 3 }}>Signature</div><div style={{ fontSize: 10, color: "#666", marginTop: 2 }}>{new Date().toLocaleDateString("en-US",{year:"numeric",month:"long",day:"numeric"})}</div></div>
+              </div>
+            </div>
+          )}
+        </div>
+      ) : (
+        <div style={{ textAlign: "center", padding: 40, color: "#bbb", fontSize: 13 }}>
+          {changeOrders.length === 0 ? "Click \"+ New CO\" to create your first change order." : "Select a change order above to edit."}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ── Bid Comparison Page ────────────────────────────── */
+function BidCompare({ subs, setSubs, cloudId }) {
+  const [viewMode, setViewMode] = useState("cards");
+  const [lightbox, setLightbox] = useState(null);
+  const [selectedBids, setSelectedBids] = useState({});
+
+  const addSub = () => setSubs(prev => [...prev, {
+    id: uid(), name: "", company: "", email: "", phone: "",
+    proposalPdf: null, lumpSum: 0, bids: [{ id: uid(), scope: "", amount: 0, included: false }], notes: "",
+  }]);
+  const removeSub = (id) => { if (confirm("Remove this subcontractor?")) setSubs(prev => prev.filter(s => s.id !== id)); };
+  const updateSub = (id, field, value) => setSubs(prev => prev.map(s => s.id === id ? { ...s, [field]: value } : s));
+  const addBid = (subId) => setSubs(prev => prev.map(s => s.id === subId ? { ...s, bids: [...s.bids, { id: uid(), scope: "", amount: 0, included: false }] } : s));
+  const updateBid = (subId, bidId, field, value) => setSubs(prev => prev.map(s => s.id === subId ? { ...s, bids: s.bids.map(b => b.id === bidId ? { ...b, [field]: value } : b) } : s));
+  const removeBid = (subId, bidId) => setSubs(prev => prev.map(s => s.id === subId ? { ...s, bids: s.bids.filter(b => b.id !== bidId) } : s));
+
+  const attachPdf = (subId) => {
+    const input = document.createElement("input"); input.type = "file"; input.accept = ".pdf,application/pdf";
+    input.onchange = async (e) => {
+      const file = e.target.files[0]; if (!file) return;
+      const fileId = makeShortId();
+      const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
+      updateSub(subId, "proposalPdf", { fileName: file.name, uploading: true });
+      try {
+        if (cloudId && fbStorage) {
+          const path = `estimates/${cloudId}/bids/${fileId}_${safeName}`;
+          const url = await storageUpload(path, file);
+          updateSub(subId, "proposalPdf", { fileName: file.name, url, uploading: false });
+        } else {
+          const reader = new FileReader();
+          reader.onload = (ev) => updateSub(subId, "proposalPdf", { dataUrl: ev.target.result, fileName: file.name, uploading: false });
+          reader.readAsDataURL(file);
+        }
+      } catch (err) {
+        console.error("PDF upload failed:", err);
+        updateSub(subId, "proposalPdf", null);
+        alert("PDF upload failed: " + err.message);
+      }
+    };
+    input.click();
+  };
+
+  // If lumpSum > 0, that's their total. Otherwise sum individual amounts.
+  const getSubTotal = (sub) => {
+    const ls = parseFloat(sub.lumpSum) || 0;
+    if (ls > 0) return ls;
+    return sub.bids.reduce((s, b) => s + (b.included ? 0 : (parseFloat(b.amount) || 0)), 0);
+  };
+  const hasLumpSum = (sub) => (parseFloat(sub.lumpSum) || 0) > 0;
+
+  const allScopes = [...new Set(subs.flatMap(s => s.bids.map(b => b.scope).filter(Boolean)))];
+
+  // Lowest per scope (only from itemized bids, not included)
+  const lowestPerScope = {};
+  allScopes.forEach(scope => {
+    let low = Infinity;
+    subs.forEach(s => {
+      const bid = s.bids.find(b => b.scope === scope);
+      if (bid && !bid.included && (parseFloat(bid.amount) || 0) > 0 && (parseFloat(bid.amount) || 0) < low) low = parseFloat(bid.amount);
+    });
+    if (low < Infinity) lowestPerScope[scope] = low;
+  });
+
+  // Lowest total
+  const subTotals = subs.filter(s => getSubTotal(s) > 0).map(s => ({ id: s.id, total: getSubTotal(s) }));
+  const lowestTotal = subTotals.length > 0 ? Math.min(...subTotals.map(t => t.total)) : 0;
+
+  const selectedTotal = Object.entries(selectedBids).reduce((sum, [scope, subId]) => {
+    const sub = subs.find(s => s.id === subId);
+    if (!sub) return sum;
+    // If this sub has lump sum, we can't add individual scope amounts — skip
+    if (hasLumpSum(sub)) return sum;
+    const bid = sub.bids.find(b => b.scope === scope);
+    return sum + (bid && !bid.included ? parseFloat(bid.amount) || 0 : 0);
+  }, 0);
+
+  return (
+    <div>
+      <div className="card" style={{ padding: 14 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <div className="card-title" style={{ marginBottom: 0 }}><span>Subcontractor Bids</span></div>
+          <div style={{ display: "flex", gap: 6 }}>
+            <button className="btn-sm" onClick={() => setViewMode("cards")}
+              style={viewMode === "cards" ? { background: "#0f3460", color: "white", borderColor: "#0f3460" } : {}}>Cards</button>
+            <button className="btn-sm" onClick={() => setViewMode("matrix")}
+              style={viewMode === "matrix" ? { background: "#0f3460", color: "white", borderColor: "#0f3460" } : {}}>Compare</button>
+          </div>
+        </div>
+      </div>
+
+      {viewMode === "cards" ? (
+        <div className="bid-subs">
+          {subs.map(sub => {
+            const isLump = hasLumpSum(sub);
+            return (
+            <div className="bid-sub-card" key={sub.id}>
+              <div className="sub-header">
+                <div style={{ flex: 1 }}>
+                  <input value={sub.name} onChange={e => updateSub(sub.id, "name", e.target.value)}
+                    placeholder="Contact Name" style={{ border: "none", fontSize: 14, fontWeight: 700, color: "#1a1a2e", width: "100%", padding: 0, background: "transparent" }} />
+                  <input value={sub.company} onChange={e => updateSub(sub.id, "company", e.target.value)}
+                    placeholder="Company Name" style={{ border: "none", fontSize: 11, color: "#666", width: "100%", padding: 0, marginTop: 2, background: "transparent" }} />
+                </div>
+                <button className="remove-btn" onClick={() => removeSub(sub.id)} style={{ marginTop: -4 }}>×</button>
+              </div>
+              <div style={{ display: "flex", gap: 6, marginBottom: 8 }}>
+                <input value={sub.email} onChange={e => updateSub(sub.id, "email", e.target.value)}
+                  placeholder="email@company.com" style={{ flex: 1, padding: "4px 8px", border: "1px solid #e8eaed", borderRadius: 4, fontSize: 10, fontFamily: "inherit" }} />
+                <input value={sub.phone} onChange={e => updateSub(sub.id, "phone", e.target.value)}
+                  placeholder="Phone" style={{ width: 110, padding: "4px 8px", border: "1px solid #e8eaed", borderRadius: 4, fontSize: 10, fontFamily: "inherit" }} />
+              </div>
+
+              <div style={{ marginBottom: 8 }}>
+                {sub.proposalPdf ? (
+                  <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                    <span className="bid-pdf-badge" onClick={() => setLightbox(sub.proposalPdf)}>&#128196; {sub.proposalPdf.fileName}</span>
+                    <button className="btn-sm del" onClick={() => updateSub(sub.id, "proposalPdf", null)} style={{ fontSize: 9 }}>Remove</button>
+                  </div>
+                ) : (
+                  <button className="btn-sm" onClick={() => attachPdf(sub.id)} style={{ fontSize: 10 }}>&#128206; Attach Proposal PDF</button>
+                )}
+              </div>
+
+              {/* Lump Sum */}
+              <div style={{ display: "flex", gap: 8, alignItems: "center", padding: "8px 10px", background: isLump ? "#f0f4ff" : "#fafbfc", border: `1px solid ${isLump ? "#0f3460" : "#eee"}`, borderRadius: 6, marginBottom: 8 }}>
+                <span style={{ fontSize: 10, fontWeight: 700, color: isLump ? "#0f3460" : "#888", whiteSpace: "nowrap" }}>Total Bid $</span>
+                <input type="number" min="0" step="0.01" value={sub.lumpSum || ""} onChange={e => updateSub(sub.id, "lumpSum", e.target.value)}
+                  placeholder="Leave blank for itemized" style={{ flex: 1, border: "1px solid #ddd", borderRadius: 4, padding: "4px 8px", fontSize: 12, textAlign: "right", fontFamily: "inherit", fontWeight: 700, fontVariantNumeric: "tabular-nums" }} />
+              </div>
+              {isLump && <div style={{ fontSize: 9, color: "#0f3460", marginBottom: 6, marginTop: -4, fontStyle: "italic" }}>
+                Lump sum bid — tag scopes below as "Incl." to show what's covered
+              </div>}
+
+              {/* Scope bids */}
+              <div style={{ borderTop: "1px solid #f0f0f0", paddingTop: 8, marginTop: 4 }}>
+                <div style={{ fontSize: 9, fontWeight: 700, color: "#888", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 6 }}>Scope & Pricing</div>
+                {sub.bids.map(bid => (
+                  <div className="bid-scope-row" key={bid.id}>
+                    <input value={bid.scope} onChange={e => updateBid(sub.id, bid.id, "scope", e.target.value)}
+                      placeholder="e.g. Drywall" style={{ flex: 1, border: "1px solid #eee", borderRadius: 4, padding: "3px 6px", fontSize: 11, fontFamily: "inherit" }} />
+                    {bid.included ? (
+                      <button onClick={() => updateBid(sub.id, bid.id, "included", false)}
+                        style={{ padding: "3px 10px", borderRadius: 4, border: "1px solid #27ae60", background: "#eafaf0", color: "#27ae60",
+                          fontSize: 10, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", whiteSpace: "nowrap" }}>
+                        &#10003; Incl.
+                      </button>
+                    ) : (
+                      <div style={{ display: "flex", alignItems: "center", gap: 2 }}>
+                        <span style={{ fontSize: 11, color: "#888" }}>$</span>
+                        <input type="number" min="0" step="0.01" value={bid.amount || ""} onChange={e => updateBid(sub.id, bid.id, "amount", e.target.value)}
+                          placeholder="0.00" style={{ width: 80, border: "1px solid #eee", borderRadius: 4, padding: "3px 6px", fontSize: 11, textAlign: "right", fontFamily: "inherit", fontVariantNumeric: "tabular-nums" }} />
+                        <button onClick={() => updateBid(sub.id, bid.id, "included", true)} title="Mark as included (no separate cost)"
+                          style={{ padding: "3px 6px", borderRadius: 4, border: "1px solid #ddd", background: "#f8f9fa", color: "#888",
+                            fontSize: 9, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", whiteSpace: "nowrap" }}>
+                          Incl.
+                        </button>
+                      </div>
+                    )}
+                    <button className="remove-btn" onClick={() => removeBid(sub.id, bid.id)} style={{ fontSize: 12, padding: "2px 4px" }}>×</button>
+                  </div>
+                ))}
+                <button className="btn-sm" onClick={() => addBid(sub.id)} style={{ marginTop: 6, fontSize: 10 }}>+ Add Scope</button>
+              </div>
+
+              <div className="sub-total">{fmt(getSubTotal(sub))}</div>
+
+              <textarea value={sub.notes} onChange={e => updateSub(sub.id, "notes", e.target.value)}
+                placeholder="Notes..." rows={1} style={{ width: "100%", marginTop: 6, padding: "4px 8px", border: "1px solid #eee", borderRadius: 4, fontSize: 10, fontFamily: "inherit", resize: "vertical", minHeight: 28 }} />
+            </div>
+          );})}
+          <div className="add-sub-card" onClick={addSub}>
+            <div style={{ fontSize: 28, color: "#aaa", marginBottom: 6 }}>+</div>
+            <div style={{ fontSize: 12, fontWeight: 600, color: "#888" }}>Add Subcontractor</div>
+          </div>
+        </div>
+      ) : (
+        <div className="card" style={{ padding: 0, overflow: "hidden" }}>
+          {allScopes.length === 0 || subs.length === 0 ? (
+            <div style={{ padding: 40, textAlign: "center", color: "#aaa", fontSize: 13 }}>
+              Add subcontractors and scope items in the Cards view first, then switch to Compare.
+            </div>
+          ) : (
+            <div style={{ overflowX: "auto" }}>
+              <table className="bid-matrix">
+                <thead><tr>
+                  <th style={{ minWidth: 140 }}>Scope</th>
+                  {subs.map(s => <th key={s.id} style={{ minWidth: 110, textAlign: "right" }}>
+                    <div>{s.name || s.company || "Sub"}</div>
+                    <div style={{ fontSize: 9, opacity: 0.7, fontWeight: 400 }}>{s.company}</div>
+                    {hasLumpSum(s) && <div style={{ marginTop: 2, fontSize: 9, color: "#f1c40f" }}>&#9679; Lump Sum</div>}
+                    {s.proposalPdf && <div style={{ marginTop: 2 }}><span style={{ fontSize: 9, opacity: 0.8, cursor: "pointer", textDecoration: "underline" }}
+                      onClick={() => setLightbox(s.proposalPdf)}>View PDF</span></div>}
+                  </th>)}
+                </tr></thead>
+                <tbody>
+                  {allScopes.map(scope => (
+                    <tr key={scope}>
+                      <td className="scope-label">{scope}</td>
+                      {subs.map(s => {
+                        const bid = s.bids.find(b => b.scope === scope);
+                        const isIncluded = bid && bid.included;
+                        const amt = bid && !bid.included ? parseFloat(bid.amount) || 0 : 0;
+                        const isLowest = !isIncluded && amt > 0 && amt === lowestPerScope[scope];
+                        const isSelected = selectedBids[scope] === s.id;
+                        const canSelect = isIncluded || amt > 0;
+                        return (
+                          <td key={s.id}
+                            className={`bid-cell ${!canSelect ? "no-bid" : ""} ${isLowest && !isSelected ? "lowest" : ""} ${isSelected ? "selected-bid" : ""}`}
+                            style={{ cursor: canSelect ? "pointer" : "default" }}
+                            onClick={() => { if (canSelect) setSelectedBids(prev => prev[scope] === s.id ? (() => { const n = {...prev}; delete n[scope]; return n; })() : { ...prev, [scope]: s.id }); }}
+                            title={canSelect ? "Click to select this bid" : ""}>
+                            {isIncluded ? (
+                              <span style={{ color: "#27ae60", fontWeight: 700, fontSize: 10 }}>&#10003; Incl.</span>
+                            ) : amt > 0 ? fmt(amt) : "—"}
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot>
+                  <tr>
+                    <td style={{ textAlign: "right" }}>Total</td>
+                    {subs.map(s => {
+                      const tot = getSubTotal(s);
+                      const isLow = tot > 0 && tot === lowestTotal;
+                      return <td key={s.id} style={{ textAlign: "right", fontVariantNumeric: "tabular-nums", color: isLow ? "#27ae60" : undefined }}>
+                        {fmt(tot)}{hasLumpSum(s) ? <div style={{ fontSize: 8, color: "#888", fontWeight: 400 }}>lump sum</div> : ""}
+                      </td>;
+                    })}
+                  </tr>
+                  {Object.keys(selectedBids).length > 0 && (
+                    <tr>
+                      <td style={{ textAlign: "right", color: "#0f3460" }}>Selected Total</td>
+                      <td colSpan={subs.length} style={{ textAlign: "center", fontSize: 16, color: "#0f3460" }}>
+                        {selectedTotal > 0 ? fmt(selectedTotal) : ""}
+                        {Object.values(selectedBids).some(subId => { const s = subs.find(x => x.id === subId); return s && hasLumpSum(s); }) && (
+                          <span style={{ fontSize: 10, color: "#888", fontWeight: 400, marginLeft: 8 }}>+ lump sum subs (see breakdown)</span>
+                        )}
+                      </td>
+                    </tr>
+                  )}
+                </tfoot>
+              </table>
+            </div>
+          )}
+          {Object.keys(selectedBids).length > 0 && (
+            <div style={{ padding: "12px 16px", background: "#f8f9fa", borderTop: "1px solid #eee", fontSize: 11, color: "#555" }}>
+              <strong style={{ color: "#0f3460" }}>Selected breakdown:</strong>{" "}
+              {Object.entries(selectedBids).map(([scope, subId]) => {
+                const sub = subs.find(s => s.id === subId);
+                if (!sub) return null;
+                const bid = sub.bids.find(b => b.scope === scope);
+                const isLump = hasLumpSum(sub);
+                const label = sub.company || sub.name;
+                if (bid && bid.included) return `${scope}: ${label} (Incl.${isLump ? " in " + fmt(getSubTotal(sub)) + " lump" : ""})`;
+                const amt = bid ? parseFloat(bid.amount) || 0 : 0;
+                return `${scope}: ${label} (${fmt(amt)})`;
+              }).filter(Boolean).join("  ·  ")}
+            </div>
+          )}
+        </div>
+      )}
+
+      {lightbox && (
+        <div className="media-lightbox" onClick={() => setLightbox(null)}>
+          <button className="lb-close" onClick={() => setLightbox(null)}>×</button>
+          <iframe src={lightbox.url || lightbox.dataUrl} style={{ width: "85vw", height: "88vh", borderRadius: 8, border: "none", background: "white" }} onClick={e => e.stopPropagation()} />
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ── Video Thumbnail with fallback for unsupported formats ── */
+function VideoThumb({ m, onClick }) {
+  const [failed, setFailed] = useState(false);
+  if (failed) {
+    return (
+      <div className="media-thumb" onClick={onClick}
+        style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", background: "#1a1a2e", cursor: "pointer" }}>
+        <div style={{ fontSize: 36, marginBottom: 4 }}>&#9654;</div>
+        <div style={{ fontSize: 11, fontWeight: 600, color: "#aaa" }}>Video</div>
+        <div style={{ fontSize: 9, color: "#666", marginTop: 2 }}>{m.mimeType || "Click to play"}</div>
+      </div>
+    );
+  }
+  return (
+    <video className="media-thumb" src={m.dataUrl} onClick={onClick} muted playsInline
+      onError={() => setFailed(true)}
+      onMouseOver={e => { try { e.target.play(); } catch(ex){} }}
+      onMouseOut={e => { try { e.target.pause(); e.target.currentTime = 0; } catch(ex){} }} />
+  );
+}
+
+/* ── PDF Thumbnail Renderer ── */
+function PdfThumb({ dataUrl, onClick }) {
+  const canRef = useRef(null);
+  useEffect(() => {
+    if (!dataUrl || !window.pdfjsLib || !canRef.current) return;
+    (async () => {
+      try {
+        const raw = atob(dataUrl.split(",")[1]);
+        const arr = new Uint8Array(raw.length);
+        for (let i = 0; i < raw.length; i++) arr[i] = raw.charCodeAt(i);
+        const pdf = await window.pdfjsLib.getDocument(arr).promise;
+        const page = await pdf.getPage(1);
+        const vp = page.getViewport({ scale: 1 });
+        const scale = 220 / vp.width;
+        const svp = page.getViewport({ scale });
+        const c = canRef.current;
+        c.width = svp.width; c.height = svp.height;
+        await page.render({ canvasContext: c.getContext("2d"), viewport: svp }).promise;
+      } catch(e) { /* fallback handled by caller */ }
+    })();
+  }, [dataUrl]);
+  return <canvas ref={canRef} className="media-thumb" onClick={onClick} style={{ cursor: "pointer", background: "#f8f8f8" }} />;
+}
+
+/* ── Media Gallery (reusable for Proposals, Receipts, Site Photos) ─ */
+function MediaGallery({ title, icon, items, onChange, emptyMsg, cloudId }) {
+  const [dragActive, setDragActive] = useState(false);
+  const [lightbox, setLightbox] = useState(null);
+  const [editId, setEditId] = useState(null);
+  const [compress, setCompress] = useState(true);
+  const [uploading, setUploading] = useState(false);
+  const inputRef = useRef(null);
+
+  const mediaSrc = (m) => m.url || m.dataUrl || "";
+
+  const compressImage = (dataUrl, maxDim, quality) => new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => {
+      let w = img.width, h = img.height;
+      if (w > maxDim || h > maxDim) { const r = Math.min(maxDim/w, maxDim/h); w = Math.round(w*r); h = Math.round(h*r); }
+      const c = document.createElement("canvas"); c.width = w; c.height = h;
+      c.getContext("2d").drawImage(img, 0, 0, w, h);
+      resolve(c.toDataURL("image/jpeg", quality));
+    };
+    img.onerror = () => resolve(dataUrl);
+    img.src = dataUrl;
+  });
+
+  const addFiles = async (files) => {
+    setUploading(true);
+    for (const file of Array.from(files)) {
+      const isVideo = file.type.startsWith("video/");
+      const isImage = file.type.startsWith("image/");
+      const isPdf = file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf");
+      if (!isVideo && !isImage && !isPdf) continue;
+      const fileType = isVideo ? "video" : isPdf ? "pdf" : "image";
+      const fileId = uid();
+      const sizeKB = Math.round(file.size / 1024);
+      const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
+      const storagePath = cloudId ? `estimates/${cloudId}/media/${fileId}_${safeName}` : null;
+
+      // For images: get a local dataUrl for instant preview, then upload to Storage
+      // For video/PDF: upload directly to Storage (no base64 — they can be huge)
+      let localPreview = null;
+      if (isImage) {
+        const raw = await new Promise(res => { const r = new FileReader(); r.onload = e => res(e.target.result); r.readAsDataURL(file); });
+        localPreview = compress ? await compressImage(raw, 1600, 0.75) : raw;
+      }
+
+      // Add item immediately with local preview so UI is responsive
+      const item = { id: fileId, name: file.name.replace(/\.[^.]+$/, ""), note: "", date: new Date().toISOString().slice(0, 10), dataUrl: localPreview, url: null, storagePath, fileType, mimeType: file.type, sizeKB, uploading: true };
+      onChange(prev => [...prev, item]);
+
+      // Upload to Firebase Storage in background
+      if (storagePath && fbStorage) {
+        try {
+          // For compressed images, convert dataUrl back to Blob for upload
+          let uploadFile = file;
+          if (isImage && localPreview) {
+            const res = await fetch(localPreview);
+            uploadFile = await res.blob();
+          }
+          const url = await storageUpload(storagePath, uploadFile);
+          onChange(prev => prev.map(m => m.id === fileId ? { ...m, url, uploading: false } : m));
+        } catch (err) {
+          console.error("Storage upload failed:", err);
+          onChange(prev => prev.map(m => m.id === fileId ? { ...m, uploading: false, uploadError: true } : m));
+        }
+      } else {
+        onChange(prev => prev.map(m => m.id === fileId ? { ...m, uploading: false } : m));
+      }
+    }
+    setUploading(false);
+  };
+
+  const handleDrop = (e) => { e.preventDefault(); setDragActive(false); addFiles(e.dataTransfer.files); };
+  const handleDragOver = (e) => { e.preventDefault(); setDragActive(true); };
+  const handleDragLeave = () => setDragActive(false);
+  const updateItem = (id, field, value) => onChange(prev => prev.map(m => m.id === id ? { ...m, [field]: value } : m));
+  const removeItem = (id) => { if (confirm("Delete this item?")) onChange(prev => prev.filter(m => m.id !== id)); };
+  const downloadItem = (m) => {
+    const src = mediaSrc(m);
+    if (!src) return;
+    if (src.startsWith("http")) { window.open(src, "_blank"); return; }
+    const ext = m.fileType === "pdf" ? ".pdf" : m.fileType === "video" ? ".mp4" : ".jpg";
+    const a = document.createElement("a"); a.href = src; a.download = (m.name || "file") + ext; a.click();
+  };
+
+  const fileTypeLabel = (ft) => ft === "video" ? "Video" : ft === "pdf" ? "PDF" : "Image";
+  const totalSizeMB = (items.reduce((s, m) => s + (m.sizeKB || 0), 0) / 1024).toFixed(1);
+
+  return (
+    <div>
+      <div className="card">
+        <div className="card-title">
+          <span>{icon} {title}</span>
+          <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+            {items.length > 0 && <span style={{ fontWeight: 400, textTransform: "none", letterSpacing: 0, fontSize: 10, color: "#888" }}>
+              {items.length} file{items.length !== 1 ? "s" : ""} · {totalSizeMB} MB
+            </span>}
+            {uploading && <span style={{ fontSize: 10, color: "#27ae60", fontWeight: 600 }}>⬆ Uploading...</span>}
+            <label style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 10, fontWeight: 500, color: compress ? "#27ae60" : "#888", cursor: "pointer", textTransform: "none", letterSpacing: 0 }}>
+              <input type="checkbox" checked={compress} onChange={e => setCompress(e.target.checked)} style={{ width: 13, height: 13, accentColor: "#27ae60" }} />
+              Compress images
+            </label>
+          </div>
+        </div>
+        <div className={`media-upload-zone ${dragActive ? "drag-active" : ""}`}
+          onDrop={handleDrop} onDragOver={handleDragOver} onDragLeave={handleDragLeave}
+          onClick={() => inputRef.current && inputRef.current.click()}>
+          <input ref={inputRef} type="file" accept="image/*,video/*,.pdf,application/pdf" multiple style={{ display: "none" }}
+            onChange={e => { addFiles(e.target.files); e.target.value = ""; }} />
+          <div style={{ fontSize: 32, marginBottom: 8 }}>&#128206;</div>
+          <div style={{ fontSize: 13, fontWeight: 600, color: "#555" }}>Drop files here or click to upload</div>
+          <div style={{ fontSize: 10, color: "#aaa", marginTop: 4 }}>Images (JPG, PNG, HEIC) · Video (MP4, MOV) · PDF documents</div>
+        </div>
+      </div>
+
+      {items.length === 0 ? (
+        <div style={{ textAlign: "center", padding: 40, color: "#bbb", fontSize: 13 }}>{emptyMsg || "No items uploaded yet."}</div>
+      ) : (
+        <div className="media-grid">
+          {items.map(m => {
+            const src = mediaSrc(m);
+            return (
+            <div className="media-card" key={m.id} style={{ opacity: m.uploading ? 0.6 : 1 }}>
+              <div className="media-actions">
+                {m.uploading
+                  ? <span style={{ fontSize: 10, color: "#27ae60", padding: "4px 6px", background: "rgba(0,0,0,0.55)", borderRadius: 6, backdropFilter: "blur(4px)" }}>⬆</span>
+                  : <button onClick={() => downloadItem(m)} title="Download">&#8595;</button>
+                }
+                <button onClick={() => removeItem(m.id)} title="Delete">&#10005;</button>
+              </div>
+              {m.fileType === "video" ? (
+                src ? <video className="media-thumb" src={src} onClick={() => setLightbox(m)} muted playsInline /> : <div className="media-thumb" style={{ display:"flex",alignItems:"center",justifyContent:"center",fontSize:32 }}>🎬</div>
+              ) : m.fileType === "pdf" ? (
+                <PdfThumb dataUrl={src} onClick={() => setLightbox(m)} />
+              ) : (
+                src ? <img className="media-thumb" src={src} onClick={() => setLightbox(m)} alt={m.name} /> : <div className="media-thumb" style={{ display:"flex",alignItems:"center",justifyContent:"center",fontSize:32 }}>📄</div>
+              )}
+              <div className="media-info">
+                {editId === m.id ? (
+                  <div>
+                    <div className="media-edit-row"><input value={m.name} onChange={e => updateItem(m.id, "name", e.target.value)} placeholder="Name" style={{ fontWeight: 600 }} /></div>
+                    <div className="media-edit-row" style={{ marginTop: 4 }}><input value={m.note} onChange={e => updateItem(m.id, "note", e.target.value)} placeholder="Add a note..." /></div>
+                    <div className="media-edit-row" style={{ marginTop: 4 }}>
+                      <input type="date" value={m.date} onChange={e => updateItem(m.id, "date", e.target.value)} style={{ width: 130 }} />
+                      <button className="btn-sm" onClick={() => setEditId(null)}>Done</button>
+                    </div>
+                  </div>
+                ) : (
+                  <div onClick={() => setEditId(m.id)} style={{ cursor: "pointer" }}>
+                    <div className="media-name">{m.name}</div>
+                    {m.note && <div className="media-note">{m.note}</div>}
+                    <div className="media-date">
+                      {m.date} · {fileTypeLabel(m.fileType)}{m.sizeKB ? ` · ${m.sizeKB > 1024 ? (m.sizeKB/1024).toFixed(1)+"MB" : m.sizeKB+"KB"}` : ""}
+                      {m.uploadError && <span style={{ color: "#e74c3c", marginLeft: 4 }}>⚠ Upload failed</span>}
+                      {!m.uploadError && !m.uploading && <span style={{ color: "#0f3460", fontWeight: 600 }}> · Edit</span>}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+            );
+          })}
+        </div>
+      )}
+
+      {lightbox && (
+        <div className="media-lightbox" onClick={() => setLightbox(null)}>
+          <button className="lb-close" onClick={() => setLightbox(null)}>×</button>
+          {lightbox.fileType === "video" ? (
+            <video src={mediaSrc(lightbox)} controls autoPlay style={{ maxWidth: "90vw", maxHeight: "90vh", borderRadius: 8 }} onClick={e => e.stopPropagation()} />
+          ) : lightbox.fileType === "pdf" ? (
+            <iframe src={mediaSrc(lightbox)} style={{ width: "85vw", height: "88vh", borderRadius: 8, border: "none", background: "white" }} onClick={e => e.stopPropagation()} />
+          ) : (
+            <img src={mediaSrc(lightbox)} alt={lightbox.name} onClick={e => e.stopPropagation()} />
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ── Takeoff Page ─────────────────────────────────── */
+function TakeoffPage({ takeoff, setTakeoff, visible, onAddLineItem }) {
+  const { pdfBase64, fileName, pageNum, totalPages, zoom, scaleSet, scaleRealFt, scalePx, pxPerFt,
+    measurements, currentPoints, activeColor, activeLabel, drawingScale, scalePoints, measureMode } = takeoff;
+  const [pdfDoc, setPdfDoc] = useState(null);
+  const canvasRef = useRef(null); const overlayRef = useRef(null);
+  const [rendered, setRendered] = useState(false);
+  const [renderCount, setRenderCount] = useState(0);
+  const set = (u) => setTakeoff(prev => ({ ...prev, ...u }));
+
+  useEffect(() => { if (window.pdfjsLib) window.pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js"; }, []);
+  useEffect(() => {
+    if (!pdfBase64) { setPdfDoc(null); return; }
+    (async () => { const pdf = await window.pdfjsLib.getDocument(new Uint8Array(base64ToBuffer(pdfBase64))).promise; setPdfDoc(pdf); set({ totalPages: pdf.numPages }); })();
+  }, [pdfBase64]);
+
+  const loadPdf = (file) => {
+    const reader = new FileReader();
+    reader.onload = (e) => set({ pdfBase64: bufferToBase64(e.target.result), fileName: file.name, pageNum: 1, measurements: [], currentPoints: [], scaleSet: false, pxPerFt: 0, scalePoints: [], drawingScale: false, scalePx: 0, scaleRealFt: "" });
+    reader.readAsArrayBuffer(file);
+  };
+
+  const renderPage = useCallback(async () => {
+    if (!pdfDoc || !canvasRef.current) return;
+    const page = await pdfDoc.getPage(pageNum);
+    const vp = page.getViewport({ scale: 1.5 * zoom });
+    const c = canvasRef.current; c.width = vp.width; c.height = vp.height;
+    await page.render({ canvasContext: c.getContext("2d"), viewport: vp }).promise;
+    if (overlayRef.current) { overlayRef.current.width = vp.width; overlayRef.current.height = vp.height; }
+    setRendered(true); setRenderCount(n => n + 1);
+  }, [pdfDoc, pageNum, zoom]);
+  useEffect(() => { renderPage(); }, [renderPage]);
+
+  const doRedrawOverlay = () => {
+    const ov = overlayRef.current; if (!ov || ov.width === 0) return;
+    const ctx = ov.getContext("2d"); ctx.clearRect(0, 0, ov.width, ov.height);
+    measurements.forEach(m => {
+      if (m.type === "area" && m.points.length >= 3) {
+        // Fill polygon
+        ctx.beginPath();
+        m.points.forEach((p, i) => { if (i === 0) ctx.moveTo(p.x, p.y); else ctx.lineTo(p.x, p.y); });
+        ctx.closePath();
+        ctx.fillStyle = m.color; ctx.globalAlpha = 0.25; ctx.fill();
+        ctx.globalAlpha = 1; ctx.strokeStyle = m.color; ctx.lineWidth = 2; ctx.setLineDash([]); ctx.stroke();
+        // Dots
+        m.points.forEach(p => { ctx.beginPath(); ctx.fillStyle = m.color; ctx.arc(p.x, p.y, 4, 0, Math.PI * 2); ctx.fill(); });
+        // Label at centroid
+        const cx = m.points.reduce((s, p) => s + p.x, 0) / m.points.length;
+        const cy = m.points.reduce((s, p) => s + p.y, 0) / m.points.length;
+        const txt = m.label + ": " + m.areaSqFt.toFixed(1) + " sf | " + m.perimFt.toFixed(1) + " lf";
+        ctx.font = "bold 12px Inter, sans-serif";
+        const tw = ctx.measureText(txt).width;
+        ctx.fillStyle = m.color; ctx.globalAlpha = 0.85;
+        ctx.fillRect(cx - tw/2 - 4, cy - 9, tw + 8, 18);
+        ctx.globalAlpha = 1; ctx.fillStyle = "#fff"; ctx.fillText(txt, cx - tw/2, cy + 5);
+      } else {
+        // Length line
+        ctx.beginPath(); ctx.strokeStyle = m.color; ctx.lineWidth = 3; ctx.setLineDash([]);
+        m.points.forEach((p, i) => { if (i === 0) ctx.moveTo(p.x, p.y); else ctx.lineTo(p.x, p.y); }); ctx.stroke();
+        m.points.forEach(p => { ctx.beginPath(); ctx.fillStyle = m.color; ctx.arc(p.x, p.y, 4, 0, Math.PI * 2); ctx.fill(); });
+        if (m.points.length >= 2) {
+          const mid = m.points[Math.floor(m.points.length / 2)];
+          const txt = m.label + ": " + m.lengthFt.toFixed(2) + " ft";
+          ctx.font = "bold 12px Inter, sans-serif"; const tw = ctx.measureText(txt).width;
+          ctx.fillStyle = m.color; ctx.globalAlpha = 0.85; ctx.fillRect(mid.x - 4, mid.y - 16, tw + 8, 18);
+          ctx.globalAlpha = 1; ctx.fillStyle = "#fff"; ctx.fillText(txt, mid.x, mid.y - 2);
+        }
+      }
+    });
+    // In-progress drawing
+    if (currentPoints.length > 0) {
+      if (measureMode === "area" && currentPoints.length >= 3) {
+        // Preview filled polygon
+        ctx.beginPath();
+        currentPoints.forEach((p, i) => { if (i === 0) ctx.moveTo(p.x, p.y); else ctx.lineTo(p.x, p.y); });
+        ctx.closePath();
+        ctx.fillStyle = activeColor; ctx.globalAlpha = 0.15; ctx.fill();
+        ctx.globalAlpha = 1; ctx.strokeStyle = activeColor; ctx.lineWidth = 2; ctx.setLineDash([6, 4]); ctx.stroke(); ctx.setLineDash([]);
+      } else if (measureMode === "area" && currentPoints.length >= 1) {
+        ctx.beginPath(); ctx.strokeStyle = activeColor; ctx.lineWidth = 2; ctx.setLineDash([6, 4]);
+        currentPoints.forEach((p, i) => { if (i === 0) ctx.moveTo(p.x, p.y); else ctx.lineTo(p.x, p.y); });
+        ctx.stroke(); ctx.setLineDash([]);
+      } else {
+        ctx.beginPath(); ctx.strokeStyle = activeColor; ctx.lineWidth = 2; ctx.setLineDash([6, 4]);
+        currentPoints.forEach((p, i) => { if (i === 0) ctx.moveTo(p.x, p.y); else ctx.lineTo(p.x, p.y); });
+        ctx.stroke(); ctx.setLineDash([]);
+      }
+      currentPoints.forEach(p => { ctx.beginPath(); ctx.fillStyle = activeColor; ctx.arc(p.x, p.y, 4, 0, Math.PI * 2); ctx.fill(); });
+    }
+    // Scale reference
+    if (scalePoints.length > 0) { ctx.beginPath(); ctx.strokeStyle = "#f1c40f"; ctx.lineWidth = 3; ctx.setLineDash([8, 4]); scalePoints.forEach((p, i) => { if (i === 0) ctx.moveTo(p.x, p.y); else ctx.lineTo(p.x, p.y); }); ctx.stroke(); ctx.setLineDash([]); scalePoints.forEach(p => { ctx.beginPath(); ctx.fillStyle = "#f1c40f"; ctx.arc(p.x, p.y, 5, 0, Math.PI * 2); ctx.fill(); }); }
+  };
+  useEffect(() => { doRedrawOverlay(); }, [measurements, currentPoints, activeColor, scalePoints, renderCount, measureMode]);
+  useEffect(() => { if (visible && pdfDoc) renderPage(); }, [visible]);
+
+  const getCanvasCoords = (e) => { const r = overlayRef.current.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; };
+  const handleCanvasClick = (e) => {
+    if (!rendered) return; const pt = getCanvasCoords(e);
+    if (drawingScale) { const next = [...scalePoints, pt]; set({ scalePoints: next }); if (next.length === 2) { const dx = next[1].x - next[0].x, dy = next[1].y - next[0].y; set({ scalePx: Math.sqrt(dx*dx+dy*dy), drawingScale: false, scalePoints: next }); } return; }
+    if (pxPerFt > 0) set({ currentPoints: [...currentPoints, pt] });
+  };
+  const finishMeasurement = () => {
+    if (measureMode === "area") {
+      if (currentPoints.length < 3) return;
+      let areaPx = 0;
+      const pts = currentPoints;
+      for (let i = 0; i < pts.length; i++) {
+        const j = (i + 1) % pts.length;
+        areaPx += pts[i].x * pts[j].y;
+        areaPx -= pts[j].x * pts[i].y;
+      }
+      areaPx = Math.abs(areaPx) / 2;
+      const areaSqFt = areaPx / (pxPerFt * pxPerFt);
+      let perimPx = 0;
+      for (let i = 0; i < pts.length; i++) {
+        const j = (i + 1) % pts.length;
+        const dx = pts[j].x - pts[i].x, dy = pts[j].y - pts[i].y;
+        perimPx += Math.sqrt(dx*dx + dy*dy);
+      }
+      const perimFt = perimPx / pxPerFt;
+      const label = activeLabel || "Area " + (measurements.filter(m=>m.type==="area").length + 1);
+      const mId = uid();
+      set({
+        measurements: [...measurements, {
+          id: mId, type: "area", label,
+          color: activeColor, points: [...currentPoints],
+          areaSqFt, areaPx, perimFt, perimPx,
+        }],
+        currentPoints: [], activeLabel: "",
+      });
+      // Create two line items: one for area (SF), one for perimeter (LF)
+      if (onAddLineItem) {
+        onAddLineItem({ description: label + " — Area", qty: Math.round(areaSqFt * 100) / 100, unit: "SF" });
+        onAddLineItem({ description: label + " — Perimeter", qty: Math.round(perimFt * 100) / 100, unit: "LF" });
+      }
+    } else {
+      if (currentPoints.length < 2) return;
+      let t = 0;
+      for (let i = 1; i < currentPoints.length; i++) {
+        const dx = currentPoints[i].x - currentPoints[i-1].x, dy = currentPoints[i].y - currentPoints[i-1].y;
+        t += Math.sqrt(dx*dx + dy*dy);
+      }
+      const lengthFt = t / pxPerFt;
+      const label = activeLabel || "Line " + (measurements.filter(m=>m.type!=="area").length + 1);
+      set({
+        measurements: [...measurements, {
+          id: uid(), type: "length", label,
+          color: activeColor, points: [...currentPoints],
+          lengthFt, lengthPx: t,
+        }],
+        currentPoints: [], activeLabel: "",
+      });
+      if (onAddLineItem) {
+        onAddLineItem({ description: label, qty: Math.round(lengthFt * 100) / 100, unit: "LF" });
+      }
+    }
+  };
+  const confirmScale = () => { const ft = parseFloat(scaleRealFt); if (!ft || !scalePx) return; set({ pxPerFt: scalePx/ft, scaleSet: true }); };
+  const totalFt = measurements.filter(m => m.type !== "area").reduce((s, m) => s + (m.lengthFt || 0), 0);
+  const totalSqFt = measurements.filter(m => m.type === "area").reduce((s, m) => s + (m.areaSqFt || 0), 0);
+  const minFinishPts = measureMode === "area" ? 3 : 2;
+
+  const exportTakeoffPDF = () => {
+    if (!canvasRef.current || !overlayRef.current) return;
+    const c = canvasRef.current;
+    const o = overlayRef.current;
+    const comp = document.createElement("canvas");
+    comp.width = c.width; comp.height = c.height;
+    const ctx = comp.getContext("2d");
+    ctx.drawImage(c, 0, 0);
+    ctx.drawImage(o, 0, 0);
+    const imgData = comp.toDataURL("image/png");
+
+    const lengthRows = measurements.filter(m => m.type !== "area");
+    const areaRows = measurements.filter(m => m.type === "area");
+
+    let tableHTML = "";
+    if (lengthRows.length > 0) {
+      tableHTML += `<h3 style="margin:18px 0 6px;color:#0f3460;font-size:13px;border-bottom:1px solid #ddd;padding-bottom:4px;">Length Measurements</h3>`;
+      tableHTML += `<table style="width:100%;border-collapse:collapse;font-size:11px;margin-bottom:12px;">
+        <thead><tr style="background:#1a1a2e;color:white;"><th style="padding:6px 10px;text-align:left;">Label</th><th style="padding:6px 10px;text-align:right;">Length (ft)</th></tr></thead><tbody>`;
+      lengthRows.forEach((m, i) => {
+        tableHTML += `<tr style="background:${i % 2 ? "#f9f9f9" : "white"};"><td style="padding:5px 10px;border-bottom:1px solid #eee;">
+          <span style="display:inline-block;width:10px;height:10px;border-radius:10px;background:${m.color};margin-right:6px;vertical-align:middle;"></span>${m.label}</td>
+          <td style="padding:5px 10px;text-align:right;border-bottom:1px solid #eee;font-weight:600;">${m.lengthFt.toFixed(2)}</td></tr>`;
+      });
+      tableHTML += `<tr style="border-top:2px solid #0f3460;font-weight:700;color:#0f3460;"><td style="padding:6px 10px;text-align:right;">Total Length</td><td style="padding:6px 10px;text-align:right;">${totalFt.toFixed(2)} ft</td></tr></tbody></table>`;
+    }
+    if (areaRows.length > 0) {
+      tableHTML += `<h3 style="margin:18px 0 6px;color:#0f3460;font-size:13px;border-bottom:1px solid #ddd;padding-bottom:4px;">Area Measurements</h3>`;
+      tableHTML += `<table style="width:100%;border-collapse:collapse;font-size:11px;margin-bottom:12px;">
+        <thead><tr style="background:#1a1a2e;color:white;"><th style="padding:6px 10px;text-align:left;">Label</th><th style="padding:6px 10px;text-align:right;">Area (sq ft)</th><th style="padding:6px 10px;text-align:right;">Perimeter (ft)</th></tr></thead><tbody>`;
+      areaRows.forEach((m, i) => {
+        tableHTML += `<tr style="background:${i % 2 ? "#f9f9f9" : "white"};"><td style="padding:5px 10px;border-bottom:1px solid #eee;">
+          <span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:${m.color};margin-right:6px;vertical-align:middle;"></span>${m.label}</td>
+          <td style="padding:5px 10px;text-align:right;border-bottom:1px solid #eee;font-weight:600;">${m.areaSqFt.toFixed(1)}</td>
+          <td style="padding:5px 10px;text-align:right;border-bottom:1px solid #eee;">${m.perimFt.toFixed(1)}</td></tr>`;
+      });
+      const totalPerim = areaRows.reduce((s, m) => s + (m.perimFt || 0), 0);
+      tableHTML += `<tr style="border-top:2px solid #0f3460;font-weight:700;color:#0f3460;"><td style="padding:6px 10px;text-align:right;">Total</td><td style="padding:6px 10px;text-align:right;">${totalSqFt.toFixed(1)} sq ft</td><td style="padding:6px 10px;text-align:right;">${totalPerim.toFixed(1)} ft</td></tr></tbody></table>`;
+    }
+
+    const win = window.open("", "_blank");
+    win.document.write(`<!DOCTYPE html><html><head><title>Takeoff — ${fileName || "Export"}</title>
+      <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
+        * { margin:0; padding:0; box-sizing:border-box; }
+        body { font-family:'Inter',sans-serif; padding:30px; color:#1a1a2e; }
+        @media print { @page { margin:0.4in; size:landscape; } body { padding:0; } .no-print { display:none !important; } }
+        .header { display:flex; justify-content:space-between; align-items:center; border-bottom:3px solid #0f3460; padding-bottom:10px; margin-bottom:16px; }
+        .header h1 { font-size:18px; color:#0f3460; }
+        .header .meta { font-size:10px; color:#666; text-align:right; }
+        .plan-img { width:100%; border:1px solid #ddd; border-radius:4px; margin-bottom:16px; }
+      </style></head><body>
+      <div class="no-print" style="margin-bottom:16px;">
+        <button onclick="window.print()" style="padding:10px 24px;background:#27ae60;color:white;border:none;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit;">Print / Save PDF</button>
+      </div>
+      <div class="header">
+        <h1>Takeoff Report</h1>
+        <div class="meta">${fileName || ""}<br/>${new Date().toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" })}<br/>Scale: 1 ft = ${pxPerFt.toFixed(1)} px</div>
+      </div>
+      <img src="${imgData}" class="plan-img" />
+      ${tableHTML}
+    </body></html>`);
+    win.document.close();
+  };
+
+  return (
+    <div className="takeoff-container">
+      <div className="takeoff-sidebar">
+        <div className="card" style={{ padding: 14 }}><div className="card-title" style={{ marginBottom: 10 }}><span>PDF Upload</span></div>
+          <input type="file" accept=".pdf" style={{ fontSize: 12 }} onChange={e => e.target.files[0] && loadPdf(e.target.files[0])} />
+          {fileName && <div style={{ fontSize: 11, color: "#666", marginTop: 6 }}>{fileName} <span className="file-badge">loaded</span></div>}
+          {totalPages > 1 && <div style={{ display: "flex", gap: 6, marginTop: 8, alignItems: "center" }}><button className="btn-sm" onClick={() => set({ pageNum: Math.max(1, pageNum-1) })}>Prev</button><span style={{ fontSize: 11 }}>Page {pageNum}/{totalPages}</span><button className="btn-sm" onClick={() => set({ pageNum: Math.min(totalPages, pageNum+1) })}>Next</button></div>}
+        </div>
+        <div className="card" style={{ padding: 14 }}><div className="card-title" style={{ marginBottom: 10 }}><span>Set Scale</span></div>
+          {!scaleSet ? (<div><div className="scale-setup"><strong>Step 1:</strong> Click "Draw Scale Line" then click two points on a known dimension.<br/><strong>Step 2:</strong> Enter the real-world distance and click Set.</div>
+            <div style={{ marginTop: 10, display: "flex", gap: 6, flexDirection: "column" }}>
+              <button className="btn-add" onClick={() => set({ drawingScale: true, scalePoints: [] })} style={drawingScale ? { background: "#f1c40f", color: "#333", borderColor: "#d4a", borderStyle: "solid" } : {}}>{drawingScale ? (scalePoints.length === 0 ? "Click 1st point..." : "Click 2nd point...") : "Draw Scale Line"}</button>
+              {scalePx > 0 && <div style={{ display: "flex", gap: 6, alignItems: "center" }}><div className="field" style={{ flex: 1 }}><label>Real distance (ft)</label><input type="number" min="0" step="0.1" value={scaleRealFt} onChange={e => set({ scaleRealFt: e.target.value })} placeholder="e.g. 10" /></div><button className="btn-primary" style={{ marginTop: 14, padding: "8px 14px", fontSize: 12 }} onClick={confirmScale}>Set</button></div>}
+            </div></div>) : (<div style={{ fontSize: 11 }}><span style={{ color: "#27ae60", fontWeight: 700 }}>&#10003; Scale set</span> &mdash; 1 ft = {pxPerFt.toFixed(1)} px <button className="btn-sm" style={{ marginLeft: 8 }} onClick={() => set({ scaleSet: false, pxPerFt: 0, scalePoints: [], scalePx: 0, scaleRealFt: "" })}>Reset</button></div>)}
+        </div>
+        <div className="card" style={{ padding: 14 }}><div className="card-title" style={{ marginBottom: 10 }}><span>Measure</span></div>
+          <div style={{ display: "flex", gap: 4, marginBottom: 10 }}>
+            <button onClick={() => set({ measureMode: "length", currentPoints: [] })}
+              style={{ flex: 1, padding: "8px 10px", borderRadius: 6, border: measureMode === "length" ? "2px solid #0f3460" : "1px solid #ddd",
+                background: measureMode === "length" ? "#e8f0ff" : "#f8f9fa", color: measureMode === "length" ? "#0f3460" : "#888",
+                fontWeight: 700, fontSize: 12, cursor: "pointer", fontFamily: "inherit", transition: "all 0.15s" }}>
+              &#9473; Length
+            </button>
+            <button onClick={() => set({ measureMode: "area", currentPoints: [] })}
+              style={{ flex: 1, padding: "8px 10px", borderRadius: 6, border: measureMode === "area" ? "2px solid #0f3460" : "1px solid #ddd",
+                background: measureMode === "area" ? "#e8f0ff" : "#f8f9fa", color: measureMode === "area" ? "#0f3460" : "#888",
+                fontWeight: 700, fontSize: 12, cursor: "pointer", fontFamily: "inherit", transition: "all 0.15s" }}>
+              &#11034; Area
+            </button>
+          </div>
+          <div className="field" style={{ marginBottom: 8 }}><label>Label</label><input value={activeLabel} onChange={e => set({ activeLabel: e.target.value })} placeholder={measureMode === "area" ? "e.g. Living Room" : "e.g. North Wall"} style={{ fontSize: 12 }} /></div>
+          <div style={{ marginBottom: 8 }}><label style={{ fontSize: 10, fontWeight: 600, color: "#666", textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 4, display: "block" }}>Color</label><div className="color-picker-row">{TAKEOFF_COLORS.map(c => <div key={c} className={`color-swatch ${activeColor === c ? "selected" : ""}`} style={{ background: c }} onClick={() => set({ activeColor: c })} />)}</div></div>
+          <div style={{ display: "flex", gap: 6 }}>
+            <button className="btn-add" style={{ flex: 1, fontSize: 11, padding: "6px 10px" }} onClick={finishMeasurement} disabled={currentPoints.length < minFinishPts}>
+              {measureMode === "area" ? `Close Area (${currentPoints.length} pts)` : `Finish Line (${currentPoints.length} pts)`}
+            </button>
+            <button className="btn-sm" onClick={() => set({ currentPoints: currentPoints.slice(0, -1) })} disabled={currentPoints.length === 0}>Undo</button>
+          </div>
+          {measureMode === "area" && currentPoints.length > 0 && currentPoints.length < 3 && <div style={{ fontSize: 10, color: "#888", marginTop: 4 }}>Click at least 3 points to define an area.</div>}
+          {!scaleSet && pdfBase64 && <div style={{ fontSize: 10, color: "#c0392b", marginTop: 6 }}>Set scale before measuring.</div>}
+        </div>
+        <div className="card" style={{ padding: 14, flex: 1, overflow: "auto" }}><div className="card-title" style={{ marginBottom: 8 }}>
+            <span>Measurements</span>
+            <div style={{ fontWeight: 400, textTransform: "none", letterSpacing: 0, fontSize: 10, color: "#27ae60", textAlign: "right" }}>
+              {totalFt > 0 && <div>{totalFt.toFixed(2)} ft</div>}
+              {totalSqFt > 0 && <div>{totalSqFt.toFixed(1)} sq ft</div>}
+            </div>
+          </div>
+          {measurements.length === 0 ? <div style={{ fontSize: 11, color: "#aaa", textAlign: "center", padding: 16 }}>No measurements yet</div> : measurements.map(m => (
+            <div className="measurement-row" key={m.id}>
+              <div className="m-color" style={{ background: m.color, borderRadius: m.type === "area" ? 2 : 10 }}></div>
+              <span className="m-label">{m.label}</span>
+              <span className="m-value" style={{ textAlign: "right" }}>
+                {m.type === "area" ? (<>{m.areaSqFt.toFixed(1)} sf<br/><span style={{ fontSize: 9, color: "#888", fontWeight: 500 }}>{m.perimFt.toFixed(1)} lf</span></>) : (m.lengthFt.toFixed(2) + " ft")}
+              </span>
+              <button className="m-del" onClick={() => set({ measurements: measurements.filter(x => x.id !== m.id) })}>×</button>
+            </div>
+          ))}
+        </div>
+      </div>
+      <div className="takeoff-canvas-wrap">
+        <div className="takeoff-toolbar"><span style={{ fontWeight: 600, color: "white", fontSize: 12 }}>Takeoff Viewer</span><div className="separator"></div>
+          {measurements.length > 0 && <button onClick={exportTakeoffPDF} style={{ background: "#27ae60", borderColor: "#27ae60", color: "white" }}>&#128424; Print Takeoff</button>}
+          <div className="zoom-controls"><span>Zoom:</span><button onClick={() => set({ zoom: Math.max(0.3, +(zoom-0.2).toFixed(1)) })}>−</button><span style={{ color: "white", fontWeight: 600, minWidth: 38, textAlign: "center" }}>{Math.round(zoom*100)}%</span><button onClick={() => set({ zoom: Math.min(4, +(zoom+0.2).toFixed(1)) })}>+</button><button onClick={() => set({ zoom: 1 })}>Fit</button></div>
+        </div>
+        <div className="takeoff-canvas-area" style={{ cursor: (drawingScale || pxPerFt > 0) ? "crosshair" : "default" }}>
+          {!pdfBase64 ? <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100%", flexDirection: "column", gap: 12, color: "#aaa", padding: 40, minHeight: 400 }}><div style={{ fontSize: 40 }}>&#128209;</div><div style={{ fontSize: 14, fontWeight: 600 }}>Upload a PDF to get started</div><div style={{ fontSize: 11 }}>Supports floor plans, site plans, and architectural drawings</div></div> : (
+            <div style={{ position: "relative", display: "inline-block" }}><canvas ref={canvasRef} style={{ display: "block" }} /><canvas ref={overlayRef} style={{ position: "absolute", top: 0, left: 0, cursor: (drawingScale || pxPerFt > 0) ? "crosshair" : "default" }} onClick={handleCanvasClick} /></div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ── Main App ─────────────────────────────────────────────────── */
+function App() {
+  const [activeTab, setActiveTab] = useState("estimator");
+  const [showExportMenu, setShowExportMenu] = useState(false);
+  const [settings, setSettings] = useState({ companyName: "", companyAddress: "", companyPhone: "", companyEmail: "", markup: 60, tax: 10 });
+  const [project, setProject] = useState({ estimateNum: "EST-001", date: new Date().toISOString().slice(0, 10), clientName: "", projectName: "", location: "" });
+
+  // Multiple estimates support
+  const newEstimate = (name) => ({
+    id: uid(), name: name || "Primary Estimate",
+    lines: [ newLineItem() ],
+    qualifications: deepCopy(DEFAULT_QUALS),
+    exclusions: deepCopy(DEFAULT_EXCL),
+    closingNote: "Thank you for the opportunity. Any questions, please feel free to contact us.",
+  });
+  const [estimates, setEstimates] = useState([ newEstimate("Primary Estimate") ]);
+  const [activeEstIdx, setActiveEstIdx] = useState(0);
+
+  // Derive active estimate data (proxies so existing code works unchanged)
+  const activeEst = estimates[activeEstIdx] || estimates[0];
+  const lines = activeEst.lines;
+  const qualifications = activeEst.qualifications;
+  const exclusions = activeEst.exclusions;
+  const closingNote = activeEst.closingNote;
+
+  // Proxy setters that update active estimate within array
+  const setLines = (fn) => setEstimates(prev => prev.map((est, i) => i === activeEstIdx ? { ...est, lines: typeof fn === "function" ? fn(est.lines) : fn } : est));
+  const setQualifications = (fn) => setEstimates(prev => prev.map((est, i) => i === activeEstIdx ? { ...est, qualifications: typeof fn === "function" ? fn(est.qualifications) : fn } : est));
+  const setExclusions = (fn) => setEstimates(prev => prev.map((est, i) => i === activeEstIdx ? { ...est, exclusions: typeof fn === "function" ? fn(est.exclusions) : fn } : est));
+  const setClosingNote = (val) => setEstimates(prev => prev.map((est, i) => i === activeEstIdx ? { ...est, closingNote: typeof val === "function" ? val(est.closingNote) : val } : est));
+
+  const addEstimate = () => {
+    const name = "Alternate " + estimates.length;
+    setEstimates(prev => [...prev, newEstimate(name)]);
+    setActiveEstIdx(estimates.length);
+  };
+  const duplicateEstimate = () => {
+    const copy = deepCopy(activeEst);
+    copy.id = uid();
+    copy.name = activeEst.name + " (Copy)";
+    setEstimates(prev => [...prev, copy]);
+    setActiveEstIdx(estimates.length);
+  };
+  const removeEstimate = (idx) => {
+    if (estimates.length <= 1) return;
+    if (!confirm("Delete \"" + estimates[idx].name + "\"?")) return;
+    setEstimates(prev => prev.filter((_, i) => i !== idx));
+    setActiveEstIdx(prev => prev >= idx ? Math.max(0, prev - 1) : prev);
+  };
+  const renameEstimate = (idx, name) => setEstimates(prev => prev.map((est, i) => i === idx ? { ...est, name } : est));
+
+  const [showSettings, setShowSettings] = useState(true);
+  const [showQualExcl, setShowQualExcl] = useState(false);
+  const [showProposal, setShowProposal] = useState(false);
+  const [showGrouped, setShowGrouped] = useState(false);
+  const printRef = useRef(null);
+  const [takeoff, setTakeoff] = useState({ pdfBase64: null, fileName: "", pageNum: 1, totalPages: 0, zoom: 1.0, scaleSet: false, scaleRealFt: "", scalePx: 0, pxPerFt: 0, measurements: [], currentPoints: [], activeColor: TAKEOFF_COLORS[0], activeLabel: "", drawingScale: false, scalePoints: [], measureMode: "length" });
+
+  // Media galleries
+  const [proposals, setProposals] = useState([]);
+  const [receipts, setReceipts] = useState([]);
+  const [sitePhotos, setSitePhotos] = useState([]);
+  const [subBids, setSubBids] = useState([]);
+  const [changeOrders, setChangeOrders] = useState([]);
+  const [signatureImg, setSignatureImg] = useState(null);
+
+  // ── Cloud / Auth state ──
+  const [fbUser, setFbUser] = useState(null);
+  const [authResolved, setAuthResolved] = useState(false);
+  const [cloudId, setCloudId] = useState(null);
+  const [cloudLoading, setCloudLoading] = useState(false);
+  const [cloudSaving, setCloudSaving] = useState(false);
+  const [cloudItems, setCloudItems] = useState([]);
+  const [cloudListLoading, setCloudListLoading] = useState(false);
+  const [toast, setToast] = useState(null);
+
+  const showToast = (msg) => { setToast(msg); setTimeout(() => setToast(null), 2400); };
+
+  // Anonymous auth — sign in silently on mount, no login UI needed
+  useEffect(() => {
+    if (!fbAuth) { setAuthResolved(true); return; }
+    const unsub = fbAuth.onAuthStateChanged(u => {
+      if (u) {
+        setFbUser(u);
+        setAuthResolved(true);
+      } else {
+        fbAuth.signInAnonymously().catch(err => {
+          console.warn("Anonymous auth failed:", err);
+          setAuthResolved(true);
+        });
+      }
+    });
+    return () => unsub();
+  }, []);
+
+  // Auto-generate a cloudId for new sessions so save is always ready
+  useEffect(() => {
+    if (!cloudId) setCloudId(makeShortId());
+  }, []);
+
+  // URL-based load on mount (?id=xxx) — public reads allowed
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const urlId = params.get("id");
+    if (!urlId || !fbDb) return;
+    setCloudLoading(true);
+    cloudLoad(urlId).then(d => {
+      if (d) {
+        loadProjectData(d);
+        setCloudId(urlId);
+        showToast("Loaded shared estimate");
+      } else {
+        alert("Estimate not found. It may have been deleted or the link is invalid.");
+      }
+    }).catch(err => {
+      console.error("Cloud load failed:", err);
+      alert("Failed to load estimate: " + err.message);
+    }).finally(() => setCloudLoading(false));
+  }, []);
+
+  // Refresh cloud list when switching to My Estimates tab or after save
+  const refreshCloudList = async () => {
+    if (!fbUser) return;
+    setCloudListLoading(true);
+    try {
+      const items = await cloudList(fbUser.uid);
+      setCloudItems(items);
+    } catch (e) {
+      console.error(e);
+      showToast("Failed to load estimates");
+    } finally {
+      setCloudListLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (fbUser && activeTab === "myestimates") refreshCloudList();
+  }, [fbUser, activeTab]);
+
+  // ── Cloud actions ──
+  const stripDataUrls = (items) => items.map(m => { const { dataUrl, ...rest } = m; return rest; });
+
+  const gatherProjectData = () => ({
+    _format: "contract-estimator-project",
+    _version: CURRENT_VERSION,
+    settings, project, estimates,
+    takeoff: { pdfBase64: takeoff.pdfBase64, fileName: takeoff.fileName, pageNum: takeoff.pageNum, zoom: takeoff.zoom, scaleSet: takeoff.scaleSet, scaleRealFt: takeoff.scaleRealFt, scalePx: takeoff.scalePx, pxPerFt: takeoff.pxPerFt, measurements: takeoff.measurements, scalePoints: takeoff.scalePoints },
+    proposals: stripDataUrls(proposals), receipts: stripDataUrls(receipts), sitePhotos: stripDataUrls(sitePhotos),
+    subBids, changeOrders, signatureImg,
+    _cloudMeta: { createdAt: Date.now(), updatedAt: Date.now() },
+  });
+
+  const handleSaveToCloud = async () => {
+    if (!fbUser) { showToast("Still connecting, try again in a moment"); return; }
+    setCloudSaving(true);
+    try {
+      const id = cloudId || makeShortId();
+      const data = gatherProjectData();
+      await cloudSave(id, data, fbUser.uid);
+      setCloudId(id);
+      // Update URL without reloading so subsequent Share Link uses the right id
+      const newUrl = window.location.pathname + "?id=" + id;
+      window.history.replaceState(null, "", newUrl);
+      showToast(cloudId ? "Saved to cloud" : "Saved! Share link ready");
+      if (activeTab === "myestimates") refreshCloudList();
+    } catch (err) {
+      console.error(err);
+      alert("Save failed: " + err.message);
+    } finally {
+      setCloudSaving(false);
+    }
+  };
+
+  const handleShareLink = () => {
+    if (!cloudId) { showToast("Save to cloud first"); return; }
+    const url = window.location.origin + window.location.pathname + "?id=" + cloudId;
+    copyToClipboard(url);
+    showToast("Share link copied to clipboard");
+  };
+
+  const handleOpenCloudItem = async (id) => {
+    setCloudLoading(true);
+    try {
+      const d = await cloudLoad(id);
+      if (d) {
+        loadProjectData(d);
+        setCloudId(id);
+        window.history.replaceState(null, "", window.location.pathname + "?id=" + id);
+        setActiveTab("estimator");
+        showToast("Estimate loaded");
+      } else {
+        alert("Estimate not found");
+      }
+    } catch (e) {
+      alert("Load failed: " + e.message);
+    } finally {
+      setCloudLoading(false);
+    }
+  };
+
+  const handleDeleteCloudItem = async (id, name) => {
+    if (!confirm(`Permanently delete "${name || id}" from cloud? This cannot be undone.`)) return;
+    try {
+      await cloudDelete(id, fbUser.uid);
+      showToast("Deleted");
+      if (cloudId === id) {
+        setCloudId(null);
+        window.history.replaceState(null, "", window.location.pathname);
+      }
+      refreshCloudList();
+    } catch (e) {
+      alert("Delete failed: " + e.message);
+    }
+  };
+
+  const handleShareCloudItem = (id) => {
+    const url = window.location.origin + window.location.pathname + "?id=" + id;
+    copyToClipboard(url);
+    showToast("Share link copied");
+  };
+
+  const handleNewEstimate = () => {
+    if (!confirm("Start a new blank estimate? Any unsaved changes will be lost.")) return;
+    setCloudId(makeShortId());
+    window.history.replaceState(null, "", window.location.pathname);
+    setEstimates([ newEstimate("Primary Estimate") ]);
+    setActiveEstIdx(0);
+    setProject({ estimateNum: "EST-001", date: new Date().toISOString().slice(0, 10), clientName: "", projectName: "", location: "" });
+    setProposals([]); setReceipts([]); setSitePhotos([]); setSubBids([]); setChangeOrders([]);
+    setTakeoff(prev => ({ ...prev, pdfBase64: null, fileName: "", measurements: [], scalePoints: [], scaleSet: false }));
+    setActiveTab("estimator");
+    showToast("New estimate started");
+  };
+
+
+  const updateLine = (id, field, value) => setLines(prev => prev.map(l => l.id === id ? { ...l, [field]: value } : l));
+  const addLine = () => setLines(prev => [...prev, newLineItem()]);
+  const removeLine = (id) => setLines(prev => prev.length > 1 ? prev.filter(l => l.id !== id) : prev);
+  const addSubItem = (lineId) => setLines(prev => prev.map(l => l.id === lineId ? { ...l, subItems: [...l.subItems, newSubItem()], expanded: true } : l));
+  const updateSubItem = (lineId, subId, field, value) => setLines(prev => prev.map(l => l.id === lineId ? { ...l, subItems: l.subItems.map(s => s.id === subId ? { ...s, [field]: value } : s) } : l));
+  const removeSubItem = (lineId, subId) => setLines(prev => prev.map(l => l.id === lineId ? { ...l, subItems: l.subItems.filter(s => s.id !== subId) } : l));
+  const toggleExpand = (lineId) => setLines(prev => prev.map(l => l.id === lineId ? { ...l, expanded: !l.expanded } : l));
+
+  // Drag-and-drop reordering
+  const dragItem = useRef(null);
+  const dragOverItem = useRef(null);
+  const [dragIdx, setDragIdx] = useState(null);
+  const [dragOverIdx, setDragOverIdx] = useState(null);
+
+  const handleDragStart = (idx) => {
+    dragItem.current = idx;
+    setDragIdx(idx);
+  };
+  const handleDragEnter = (idx) => {
+    dragOverItem.current = idx;
+    setDragOverIdx(idx);
+  };
+  const handleDragEnd = () => {
+    if (dragItem.current !== null && dragOverItem.current !== null && dragItem.current !== dragOverItem.current) {
+      setLines(prev => {
+        const next = [...prev];
+        const [moved] = next.splice(dragItem.current, 1);
+        next.splice(dragOverItem.current, 0, moved);
+        return next;
+      });
+    }
+    dragItem.current = null;
+    dragOverItem.current = null;
+    setDragIdx(null);
+    setDragOverIdx(null);
+  };
+
+  // ── Cost calculations ──
+  // Sub-item base: material + labor(trade*hrs)  * qty
+  // Tax only on material portion if taxable
+  const calcItemMaterialBase = (item) => (parseFloat(item.materialCost) || 0) * (parseFloat(item.qty) || 0);
+  const calcItemLaborBase = (item) => getLaborCost(item) * (parseFloat(item.qty) || 0);
+  const calcItemBase = (item) => calcItemMaterialBase(item) + calcItemLaborBase(item);
+
+  const calcSubBase = (sub) => calcItemBase(sub);
+
+  const getLineBaseCost = (line) => {
+    if (line.subItems && line.subItems.length > 0) return line.subItems.reduce((sum, s) => sum + calcSubBase(s), 0);
+    return calcItemBase(line);
+  };
+
+  // Material total for a line (for tax calc)
+  const getLineMaterialTaxable = (line) => {
+    if (line.subItems && line.subItems.length > 0) {
+      return line.subItems.reduce((sum, s) => sum + (s.taxable ? calcItemMaterialBase(s) : 0), 0);
+    }
+    return line.taxable ? calcItemMaterialBase(line) : 0;
+  };
+
+  // Final client price: (base + markup on base) + (tax on taxable material portion after markup)
+  const calcFinal = (line) => {
+    const base = getLineBaseCost(line);
+    const afterMarkup = base * (1 + settings.markup / 100);
+    const taxableMat = getLineMaterialTaxable(line) * (1 + settings.markup / 100);
+    return afterMarkup + taxableMat * (settings.tax / 100);
+  };
+
+  const grandTotal = lines.reduce((sum, l) => sum + calcFinal(l), 0);
+  const subtotal = lines.reduce((sum, l) => sum + getLineBaseCost(l), 0);
+  const markupAmt = subtotal * (settings.markup / 100);
+  const totalTaxableMat = lines.reduce((sum, l) => sum + getLineMaterialTaxable(l), 0);
+  const taxAmt = totalTaxableMat * (1 + settings.markup / 100) * (settings.tax / 100);
+
+  // For sub-item display price
+  const calcSubFinal = (sub) => {
+    const base = calcSubBase(sub);
+    const afterMarkup = base * (1 + settings.markup / 100);
+    const taxMat = (sub.taxable ? calcItemMaterialBase(sub) : 0) * (1 + settings.markup / 100);
+    return afterMarkup + taxMat * (settings.tax / 100);
+  };
+
+  // ── Export / Import ──
+  const exportFullProject = () => {
+    const data = { _format: "contract-estimator-project", _version: 5, settings, project, estimates,
+      takeoff: { pdfBase64: takeoff.pdfBase64, fileName: takeoff.fileName, pageNum: takeoff.pageNum, zoom: takeoff.zoom, scaleSet: takeoff.scaleSet, scaleRealFt: takeoff.scaleRealFt, scalePx: takeoff.scalePx, pxPerFt: takeoff.pxPerFt, measurements: takeoff.measurements, scalePoints: takeoff.scalePoints },
+      proposals, receipts, sitePhotos, subBids, changeOrders, signatureImg };
+    const blob = new Blob([JSON.stringify(data)], { type: "application/json" });
+    const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = `${project.estimateNum||"estimate"}_${project.date}.cep`; a.click();
+    setShowExportMenu(false);
+  };
+  const exportLightweight = () => {
+    const stripData = (arr) => arr.map(m => ({ ...m, dataUrl: "(stripped)" }));
+    const data = { _format: "contract-estimator-project", _version: 5, settings, project, estimates,
+      takeoff: { fileName: takeoff.fileName, scaleSet: takeoff.scaleSet, scaleRealFt: takeoff.scaleRealFt, scalePx: takeoff.scalePx, pxPerFt: takeoff.pxPerFt, measurements: takeoff.measurements, scalePoints: takeoff.scalePoints },
+      proposals: stripData(proposals), receipts: stripData(receipts), sitePhotos: stripData(sitePhotos),
+      subBids: subBids.map(s => ({ ...s, proposalPdf: s.proposalPdf ? { ...s.proposalPdf, dataUrl: "(stripped)" } : null })),
+      changeOrders, signatureImg: "(stripped)" };
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+    const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = `${project.estimateNum||"estimate"}_${project.date}.json`; a.click();
+    setShowExportMenu(false);
+  };
+  const loadProjectData = (d) => {
+    // Firebase strips empty arrays and turns undefined into null on round-trip,
+    // which can leave qualification/exclusion items with subs === null/undefined.
+    // Normalize them so every item has a valid subs array.
+    const normSubs = (arr) => (arr || []).map(item => ({
+      text: (item && item.text) || "",
+      subs: (item && Array.isArray(item.subs)) ? item.subs : [],
+    }));
+    if (d.settings) setSettings(s => ({ ...s, ...d.settings }));
+    if (d.project) setProject(d.project);
+    // Handle new estimates array or old single-estimate format
+    if (d.estimates) {
+      setEstimates(d.estimates.map(est => ({
+        ...est,
+        lines: (est.lines || []).map(l => ({ ...newLineItem(), ...l, subItems: (l.subItems || []).map(s => ({ ...newSubItem(), ...s })) })),
+        qualifications: est.qualifications ? normSubs(est.qualifications) : deepCopy(DEFAULT_QUALS),
+        exclusions: est.exclusions ? normSubs(est.exclusions) : deepCopy(DEFAULT_EXCL),
+        closingNote: est.closingNote || "",
+      })));
+      setActiveEstIdx(0);
+    } else if (d.lines) {
+      setEstimates([{
+        id: uid(), name: "Primary Estimate",
+        lines: d.lines.map(l => ({ ...newLineItem(), ...l, subItems: (l.subItems || []).map(s => ({ ...newSubItem(), ...s })) })),
+        qualifications: d.qualifications ? normSubs(d.qualifications) : deepCopy(DEFAULT_QUALS),
+        exclusions: d.exclusions ? normSubs(d.exclusions) : deepCopy(DEFAULT_EXCL),
+        closingNote: d.closingNote || "",
+      }]);
+      setActiveEstIdx(0);
+    }
+    if (d.takeoff) setTakeoff(prev => ({ ...prev, pdfBase64: d.takeoff.pdfBase64 || null, fileName: d.takeoff.fileName || "", pageNum: d.takeoff.pageNum || 1, zoom: d.takeoff.zoom || 1, scaleSet: d.takeoff.scaleSet || false, scaleRealFt: d.takeoff.scaleRealFt || "", scalePx: d.takeoff.scalePx || 0, pxPerFt: d.takeoff.pxPerFt || 0, measurements: (d.takeoff.measurements || []).map(m => ({ ...m, type: m.type || "length" })), scalePoints: d.takeoff.scalePoints || [], currentPoints: [], drawingScale: false, activeLabel: "", activeColor: TAKEOFF_COLORS[0], measureMode: "length" }));
+    const hasMedia = (m) => (m.url || (m.dataUrl && m.dataUrl !== "(stripped)"));
+    if (d.proposals) setProposals(d.proposals.filter(hasMedia));
+    if (d.receipts) setReceipts(d.receipts.filter(hasMedia));
+    if (d.sitePhotos) setSitePhotos(d.sitePhotos.filter(hasMedia));
+    if (d.subBids) setSubBids(d.subBids.map(s => ({
+      ...s,
+      proposalPdf: s.proposalPdf && (s.proposalPdf.url || (s.proposalPdf.dataUrl && s.proposalPdf.dataUrl !== "(stripped)")) ? s.proposalPdf : null,
+      bids: s.bids || [],
+    })));
+    if (d.changeOrders) setChangeOrders(d.changeOrders);
+    if (d.signatureImg && d.signatureImg !== "(stripped)") setSignatureImg(d.signatureImg);
+  };
+
+  const importProject = () => {
+    const input = document.createElement("input"); input.type = "file"; input.accept = ".json,.cep";
+    input.onchange = (e) => { const file = e.target.files[0]; if (!file) return;
+      const reader = new FileReader(); reader.onload = (ev) => { try {
+        const d = JSON.parse(ev.target.result);
+        loadProjectData(d);
+      } catch (err) { alert("Invalid file: " + err.message); } }; reader.readAsText(file); };
+    input.click(); setShowExportMenu(false);
+  };
+
+  const printProposal = () => { setShowProposal(true); setTimeout(() => window.print(), 400); };
+  const resetDefaults = () => { setQualifications(deepCopy(DEFAULT_QUALS)); setExclusions(deepCopy(DEFAULT_EXCL)); };
+  const getGroups = () => {
+    const active = lines.filter(l => l.description || l.workCode);
+    const map = new Map();
+    active.forEach(l => { const key = l.workCode || "(no code)"; if (!map.has(key)) map.set(key, []); map.get(key).push(l); });
+    return Array.from(map.entries()).map(([code, items]) => ({ code, items, subtotal: items.reduce((s, l) => s + calcFinal(l), 0) }));
+  };
+
+  useEffect(() => { if (!showExportMenu) return; const h = () => setShowExportMenu(false); document.addEventListener("click", h, true); return () => document.removeEventListener("click", h, true); }, [showExportMenu]);
+
+  // ── Labor trade selector component ──
+  const TradeSelector = ({ item, onChange }) => {
+    const handleTradeChange = (e) => {
+      const trade = e.target.value;
+      if (trade === "" || trade === "Custom") {
+        onChange("laborTrade", trade);
+        if (trade === "") onChange("laborRate", 0);
+      } else {
+        const r = LABOR_RATES.find(x => x.trade === trade);
+        if (r) { onChange("laborTrade", trade); onChange("laborRate", r.st); }
+      }
+    };
+    const handleRateChange = (e) => {
+      onChange("laborRate", e.target.value);
+      const r = LABOR_RATES.find(x => x.trade === item.laborTrade);
+      if (r && parseFloat(e.target.value) !== r.st) {
+        onChange("laborTrade", "Custom");
+      }
+    };
+    const showFields = item.laborTrade || (parseFloat(item.laborRate) > 0);
+    const hasOT = parseFloat(item.laborOTHours) > 0;
+    return (
+      <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+        <div style={{ display: "flex", gap: 3, alignItems: "center" }}>
+          <select className="trade-select" value={item.laborTrade} onChange={handleTradeChange} style={{ flex: "1 1 65px", minWidth: 55 }}>
+            <option value="">None</option>
+            {LABOR_RATES.map(r => <option key={r.trade} value={r.trade}>{r.trade}</option>)}
+            <option value="Custom">Custom</option>
+          </select>
+          {showFields && <>
+            <input className="cost-input" type="number" min="0" step="0.01"
+              value={item.laborRate || ""} onChange={handleRateChange}
+              placeholder="$/hr" title="Labor rate per hour"
+              style={{ width: 58, fontSize: 11 }} />
+            <div style={{ display: "flex", alignItems: "center", gap: 1 }}>
+              <span style={{ fontSize: 9, color: "#666", fontWeight: 600 }}>ST</span>
+              <input className="qty-input" type="number" min="0" step="0.5"
+                value={item.laborSTHours || ""} onChange={e => onChange("laborSTHours", e.target.value)}
+                placeholder="0" title="Straight-time hours"
+                style={{ width: 40, fontSize: 11 }} />
+            </div>
+          </>}
+        </div>
+        {showFields && (
+          <div style={{ display: "flex", gap: 3, alignItems: "center" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 1, flex: "0 0 auto" }}>
+              <span style={{ fontSize: 9, color: hasOT ? "#e74c3c" : "#999", fontWeight: 700 }}>OT</span>
+              <input className="qty-input" type="number" min="0" step="0.5"
+                value={item.laborOTHours || ""} onChange={e => onChange("laborOTHours", e.target.value)}
+                placeholder="0" title="Overtime hours"
+                style={{ width: 40, fontSize: 11, borderColor: hasOT ? "#e7a0a0" : undefined }} />
+              <span style={{ fontSize: 9, color: "#666", fontWeight: 600 }}>hrs @</span>
+              <input className="qty-input" type="number" min="0" step="5"
+                value={item.laborOTPct} onChange={e => onChange("laborOTPct", e.target.value)}
+                title="Overtime percentage (50 = 1.5× rate)"
+                style={{ width: 42, fontSize: 11, fontWeight: 600, color: "#e74c3c", textAlign: "center" }} />
+              <span style={{ fontSize: 9, color: "#888", fontWeight: 600 }}>%</span>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  // Labor display for read-only summary
+  const laborSummary = (item) => {
+    const cost = getLaborCost(item);
+    if (cost === 0) return "";
+    const otH = parseFloat(item.laborOTHours) || 0;
+    const stH = parseFloat(item.laborSTHours) || 0;
+    let s = `${item.laborTrade || "Custom"} $${item.laborRate}/hr`;
+    if (stH > 0) s += ` ${stH}h ST`;
+    if (otH > 0) s += ` + ${otH}h OT@${item.laborOTPct}%`;
+    return s + ` = ${fmt(cost)}`;
+  };
+
+  return (
+    <>
+    {!authResolved || cloudLoading ? (
+      <div className="login-wrap">
+        <div className="login-card" style={{ textAlign: "center" }}>
+          <h2>Contract Estimator</h2>
+          <div className="login-sub">{cloudLoading ? "Loading estimate..." : "Connecting..."}</div>
+        </div>
+      </div>
+    ) : (
+    <div className="app-container">
+      <div className="app-header">
+        <div><h1>Contract Estimator</h1><div className="subtitle">CSI-coded estimation with built-in markup & tax</div></div>
+        <div className="header-actions">
+          <button className="cloud-btn" onClick={handleSaveToCloud} disabled={cloudSaving} title="Save this estimate to the cloud">
+            {cloudSaving ? "Saving..." : "☁ Save to Cloud"}
+          </button>
+          {cloudId && (
+            <button className="cloud-btn share" onClick={handleShareLink} title="Copy a public read-only link">
+              🔗 Share Link
+            </button>
+          )}
+          <button onClick={handleNewEstimate} title="Start a new blank estimate">+ New</button>
+          <button onClick={importProject}>Import</button>
+          <div className="export-menu">
+            <button onClick={(e) => { e.stopPropagation(); setShowExportMenu(!showExportMenu); }}>Export &#9662;</button>
+            {showExportMenu && (() => {
+              const mediaSizeKB = [...proposals, ...receipts, ...sitePhotos].reduce((s, m) => s + (m.sizeKB || Math.round((m.dataUrl||"").length * 3 / 4 / 1024)), 0);
+              const bidPdfSizeKB = subBids.reduce((s, sub) => s + (sub.proposalPdf ? Math.round((sub.proposalPdf.dataUrl||"").length * 3 / 4 / 1024) : 0), 0);
+              const pdfSizeKB = takeoff.pdfBase64 ? Math.round(takeoff.pdfBase64.length * 3 / 4 / 1024) : 0;
+              const fullSizeMB = ((mediaSizeKB + bidPdfSizeKB + pdfSizeKB) / 1024 + 0.1).toFixed(1);
+              return <div className="export-dropdown">
+              <button onClick={exportFullProject}><span className="drop-icon">&#128230;</span><div><div className="drop-label">Full Project (.cep) <span style={{ fontWeight: 400, color: "#888" }}>~{fullSizeMB} MB</span></div><div className="drop-desc">Everything including media & PDF — fully shareable</div></div></button>
+              <div className="drop-sep"></div>
+              <button onClick={exportLightweight}><span className="drop-icon">&#128196;</span><div><div className="drop-label">Lightweight (.json)</div><div className="drop-desc">Estimator + measurements only, no media</div></div></button>
+              <div className="drop-sep"></div>
+              <div style={{ padding: "10px 16px", fontSize: 10, color: "#888", lineHeight: 1.5 }}>
+                <strong style={{ color: "#555" }}>Sharing tips:</strong><br/>
+                · Under 25 MB — email as attachment (rename .cep to .json if blocked)<br/>
+                · Over 25 MB — use Google Drive, Dropbox, or WeTransfer<br/>
+                · Recipient opens the .cep file using this same app via Import
+              </div>
+            </div>;
+            })()}
+          </div>
+        </div>
+      </div>
+
+
+      <div className="tab-bar">
+        <button className={`tab-btn ${activeTab === "estimator" ? "active" : ""}`} onClick={() => setActiveTab("estimator")}>&#128221; Estimator</button>
+        <button className={`tab-btn ${activeTab === "myestimates" ? "active" : ""}`} onClick={() => setActiveTab("myestimates")}>&#9729; My Estimates{cloudItems.length > 0 && <span className="file-badge" style={{ marginLeft: 6 }}>{cloudItems.length}</span>}</button>
+        <button className={`tab-btn ${activeTab === "takeoff" ? "active" : ""}`} onClick={() => setActiveTab("takeoff")}>&#128208; Takeoff{takeoff.measurements.length > 0 && <span className="file-badge" style={{ marginLeft: 6 }}>{takeoff.measurements.length}</span>}</button>
+        <button className={`tab-btn ${activeTab === "proposals" ? "active" : ""}`} onClick={() => setActiveTab("proposals")}>&#128203; Proposals{proposals.length > 0 && <span className="file-badge" style={{ marginLeft: 6 }}>{proposals.length}</span>}</button>
+        <button className={`tab-btn ${activeTab === "receipts" ? "active" : ""}`} onClick={() => setActiveTab("receipts")}>&#129534; Receipts{receipts.length > 0 && <span className="file-badge" style={{ marginLeft: 6 }}>{receipts.length}</span>}</button>
+        <button className={`tab-btn ${activeTab === "photos" ? "active" : ""}`} onClick={() => setActiveTab("photos")}>&#128247; Site Photos{sitePhotos.length > 0 && <span className="file-badge" style={{ marginLeft: 6 }}>{sitePhotos.length}</span>}</button>
+        <button className={`tab-btn ${activeTab === "bids" ? "active" : ""}`} onClick={() => setActiveTab("bids")}>&#9878; Bid Compare{subBids.length > 0 && <span className="file-badge" style={{ marginLeft: 6 }}>{subBids.length}</span>}</button>
+        <button className={`tab-btn ${activeTab === "changeorders" ? "active" : ""}`} onClick={() => setActiveTab("changeorders")}>&#128220; Change Orders{changeOrders.length > 0 && <span className="file-badge" style={{ marginLeft: 6 }}>{changeOrders.length}</span>}</button>
+      </div>
+
+      {activeTab === "myestimates" && (
+        <div className="card">
+          <div className="card-title">
+            <span>☁ My Cloud Estimates</span>
+            <button onClick={refreshCloudList} disabled={cloudListLoading}>{cloudListLoading ? "Loading..." : "↻ Refresh"}</button>
+          </div>
+          {cloudListLoading ? (
+            <div className="cloud-loading">Loading your estimates...</div>
+          ) : cloudItems.length === 0 ? (
+            <div className="cloud-empty">
+              No cloud estimates yet.<br/>
+              <span style={{ fontSize: 11 }}>Save your current estimate using the ☁ Save to Cloud button in the header.</span>
+            </div>
+          ) : (
+            <div className="cloud-list">
+              {cloudItems.map(item => {
+                const title = item.projectName || item.clientName || item.estimateNum || "(untitled)";
+                const subtitle = [item.estimateNum, item.clientName, item.location].filter(Boolean).join(" • ");
+                const updatedStr = item.updatedAt ? new Date(item.updatedAt).toLocaleString() : "";
+                const isCurrent = cloudId === item.id;
+                return (
+                  <div key={item.id} className="cloud-item" style={isCurrent ? { borderColor: "#0f3460", background: "#f8f9ff" } : {}}>
+                    <div className="cloud-item-info">
+                      <div className="cloud-item-title">
+                        {title}
+                        {isCurrent && <span style={{ marginLeft: 8, fontSize: 10, fontWeight: 600, color: "#0f3460", background: "#e8f0ff", padding: "2px 8px", borderRadius: 10 }}>CURRENT</span>}
+                      </div>
+                      <div className="cloud-item-meta">
+                        {subtitle && <span>{subtitle}</span>}
+                        {updatedStr && <span>🕐 {updatedStr}</span>}
+                        {item.companyName && <span>🏢 {item.companyName}</span>}
+                      </div>
+                    </div>
+                    <div className="cloud-item-actions">
+                      <button className="open-btn" onClick={() => handleOpenCloudItem(item.id)}>Open</button>
+                      <button className="share-btn" onClick={() => handleShareCloudItem(item.id)} title="Copy share link">🔗</button>
+                      <button className="del-btn" onClick={() => handleDeleteCloudItem(item.id, title)} title="Delete">🗑</button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
+      <div style={{ display: activeTab === "takeoff" ? "block" : "none" }}><TakeoffPage takeoff={takeoff} setTakeoff={setTakeoff} visible={activeTab === "takeoff"}
+        onAddLineItem={({ description, qty, unit }) => {
+          setLines(prev => {
+            const existing = prev.find(l => l.description === description && l.unit === unit);
+            if (existing) {
+              return prev.map(l => l.id === existing.id
+                ? { ...l, qty: Math.round(((parseFloat(l.qty) || 0) + qty) * 100) / 100 }
+                : l
+              );
+            }
+            return [...prev, { ...newLineItem(), description, qty, unit }];
+          });
+        }} /></div>
+
+      <div style={{ display: activeTab === "proposals" ? "block" : "none" }}>
+        <MediaGallery title="Proposals & Documents" icon="&#128203;" items={proposals} onChange={setProposals}
+          emptyMsg="Upload proposal documents, contracts, change orders, or any project documents." cloudId={cloudId} />
+      </div>
+
+      <div style={{ display: activeTab === "receipts" ? "block" : "none" }}>
+        <MediaGallery title="Receipts & Invoices" icon="&#129534;" items={receipts} onChange={setReceipts}
+          emptyMsg="Upload receipts, invoices, purchase orders, or material slips." cloudId={cloudId} />
+      </div>
+
+      <div style={{ display: activeTab === "photos" ? "block" : "none" }}>
+        <MediaGallery title="Site Photos & Videos" icon="&#128247;" items={sitePhotos} onChange={setSitePhotos}
+          emptyMsg="Upload site photos, progress pics, before/after shots, or walkthrough videos." cloudId={cloudId} />
+      </div>
+
+      <div style={{ display: activeTab === "bids" ? "block" : "none" }}>
+        <BidCompare subs={subBids} setSubs={setSubBids} cloudId={cloudId} />
+      </div>
+
+      <div style={{ display: activeTab === "changeorders" ? "block" : "none" }}>
+        <ChangeOrderPage changeOrders={changeOrders} setChangeOrders={setChangeOrders}
+          settings={settings} project={project} signatureImg={signatureImg} setSignatureImg={setSignatureImg} />
+      </div>
+
+      <div style={{ display: activeTab === "estimator" ? "block" : "none" }}>
+
+      {/* ── Estimate Selector ── */}
+      <div className="est-selector">
+        <span className="est-label">Estimates:</span>
+        {estimates.map((est, i) => (
+          <button key={est.id} className={`est-tab ${i === activeEstIdx ? "active" : ""}`}
+            onClick={() => setActiveEstIdx(i)}
+            onDoubleClick={() => {
+              const name = prompt("Rename estimate:", est.name);
+              if (name !== null && name.trim()) renameEstimate(i, name.trim());
+            }}>
+            {est.name}
+            {estimates.length > 1 && <span className="est-close" onClick={e => { e.stopPropagation(); removeEstimate(i); }} title="Delete">×</span>}
+          </button>
+        ))}
+        <button className="est-add-btn" onClick={addEstimate} title="Create new blank estimate">+ New</button>
+        <button className="est-add-btn" onClick={duplicateEstimate} title="Duplicate current estimate">&#10697; Duplicate</button>
+      </div>
+
+      {/* ── Settings ── */}
+      <div className="card">
+        <div className="card-title"><span>Company Settings & Rates</span><button onClick={() => setShowSettings(!showSettings)}>{showSettings ? "Collapse" : "Expand"}</button></div>
+        {showSettings && <>
+          <div className="grid-3" style={{ marginBottom: 12 }}>
+            <div className="field"><label>Company Name</label><input value={settings.companyName} onChange={e => setSettings(s => ({...s, companyName: e.target.value}))} placeholder="A. Michaels Construction, LLC" /></div>
+            <div className="field"><label>Address</label><input value={settings.companyAddress} onChange={e => setSettings(s => ({...s, companyAddress: e.target.value}))} placeholder="4 Stirrup Ct. Lemont, IL 60439" /></div>
+            <div className="field"><label>Phone</label><input value={settings.companyPhone} onChange={e => setSettings(s => ({...s, companyPhone: e.target.value}))} placeholder="630-800-0907" /></div>
+          </div>
+          <div className="grid-3">
+            <div className="field"><label>Email</label><input value={settings.companyEmail} onChange={e => setSettings(s => ({...s, companyEmail: e.target.value}))} placeholder="info@company.com" /></div>
+            <div className="field"><label>Markup %</label><input className="rate-input" type="number" value={settings.markup} onChange={e => setSettings(s => ({...s, markup: parseFloat(e.target.value) || 0}))} /></div>
+            <div className="field"><label>Sales Tax % (materials only)</label><input className="rate-input" type="number" value={settings.tax} onChange={e => setSettings(s => ({...s, tax: parseFloat(e.target.value) || 0}))} /></div>
+          </div>
+        </>}
+      </div>
+
+      {/* ── Project Info ── */}
+      <div className="card">
+        <div className="card-title">Project Information</div>
+        <div className="grid-3">
+          <div className="field"><label>Client Name</label><input value={project.clientName} onChange={e => setProject(p => ({...p, clientName: e.target.value}))} placeholder="Client / Company Name" /></div>
+          <div className="field"><label>Project Name</label><input value={project.projectName} onChange={e => setProject(p => ({...p, projectName: e.target.value}))} placeholder="Weekend Maintenance Scope" /></div>
+          <div className="field"><label>Location / Site</label><input value={project.location} onChange={e => setProject(p => ({...p, location: e.target.value}))} placeholder="123 Client Blvd, City, ST" /></div>
+        </div>
+        <div className="grid-3" style={{ marginTop: 10 }}>
+          <div className="field"><label>Estimate #</label><input value={project.estimateNum} onChange={e => setProject(p => ({...p, estimateNum: e.target.value}))} /></div>
+          <div className="field"><label>Date</label><input type="date" value={project.date} onChange={e => setProject(p => ({...p, date: e.target.value}))} /></div>
+          <div style={{ display: "flex", alignItems: "flex-end", gap: 10 }}>
+            <span style={{ fontSize: 11, color: "#888", paddingBottom: 10 }}>
+              Markup: <strong style={{ color: "#0f3460" }}>{settings.markup}%</strong> &nbsp;|&nbsp;
+              Tax: <strong style={{ color: "#0f3460" }}>{settings.tax}%</strong> (materials) &nbsp;|&nbsp;
+              Markup mult: <strong style={{ color: "#27ae60" }}>{(1 + settings.markup/100).toFixed(4)}x</strong>
+            </span>
+          </div>
+        </div>
+      </div>
+
+      {/* ── Line Items ── */}
+      <div className="card" style={{ padding: 0, overflow: "hidden" }}>
+        <div style={{ padding: "16px 20px 0" }}>
+          <div className="card-title" style={{ marginBottom: 10 }}>
+            <span>Line Items — Scope of Work</span>
+            <span style={{ fontSize: 11, color: "#888", fontWeight: 400, textTransform: "none", letterSpacing: 0 }}>{lines.length} item{lines.length !== 1 ? "s" : ""}</span>
+          </div>
+        </div>
+        <div style={{ overflowX: "auto" }}>
+          <table className="line-table">
+            <thead><tr>
+              <th style={{ width: 24 }}></th>
+              <th style={{ width: 24 }}></th>
+              <th style={{ width: 24 }}></th>
+              <th style={{ width: 80 }}>Work Code</th>
+              <th style={{ minWidth: 140 }}>Description</th>
+              <th style={{ width: 110 }}>CSI Div</th>
+              <th style={{ width: 42 }}>Qty</th>
+              <th style={{ width: 40 }}>Unit</th>
+              <th style={{ width: 75 }}>Material $</th>
+              <th style={{ width: 30, textAlign: "center" }} title="Taxable material">Tax</th>
+              <th style={{ width: 240 }}>Labor</th>
+              <th style={{ width: 110 }}>Link</th>
+              <th style={{ width: 100, textAlign: "right", paddingRight: 8 }}>Client Price</th>
+              <th style={{ width: 64 }}></th>
+            </tr></thead>
+            <tbody>
+              {lines.map((line, idx) => {
+                const hasSubs = line.subItems && line.subItems.length > 0;
+                const subBase = hasSubs ? line.subItems.reduce((s, si) => s + calcSubBase(si), 0) : 0;
+                return (
+                  <React.Fragment key={line.id}>
+                    <tr draggable onDragStart={() => handleDragStart(idx)} onDragEnter={() => handleDragEnter(idx)} onDragEnd={handleDragEnd} onDragOver={e => e.preventDefault()} className={`${dragIdx === idx ? "dragging" : ""} ${dragOverIdx === idx && dragIdx !== idx ? "drag-over" : ""}`}>
+                      <td style={{ textAlign: "center" }}><span className="drag-handle" title="Drag to reorder">&#9776;</span></td>
+                      <td style={{ textAlign: "center", color: "#aaa", fontSize: 10 }}>{idx + 1}</td>
+                      <td style={{ textAlign: "center" }}>{hasSubs && <button className={`expand-btn ${line.expanded ? "open" : ""}`} onClick={() => toggleExpand(line.id)}>{line.expanded ? "−" : "+"}</button>}</td>
+                      <td><input value={line.workCode} onChange={e => updateLine(line.id, "workCode", e.target.value)} placeholder="WC-001" /></td>
+                      <td><input value={line.description} onChange={e => updateLine(line.id, "description", e.target.value)} placeholder="Description" /></td>
+                      <td><select className="csi-select" value={line.csiDiv} onChange={e => updateLine(line.id, "csiDiv", e.target.value)}>{CSI_DIVISIONS.map(d => <option key={d.code} value={d.code}>{d.code} – {d.name}</option>)}</select></td>
+                      {hasSubs ? (
+                        <td colSpan={5} style={{ fontSize: 10, color: "#888", textAlign: "center", fontStyle: "italic" }}>
+                          {line.subItems.length} sub-item{line.subItems.length !== 1 ? "s" : ""} &mdash; base: {fmt(subBase)}
+                        </td>
+                      ) : (<>
+                        <td><input className="qty-input" type="number" min="0" step="1" value={line.qty || ""} onChange={e => updateLine(line.id, "qty", e.target.value)} placeholder="1" /></td>
+                        <td><input style={{ textAlign: "center" }} value={line.unit} onChange={e => updateLine(line.id, "unit", e.target.value)} placeholder="EA" /></td>
+                        <td><input className="cost-input" type="number" min="0" step="0.01" value={line.materialCost || ""} onChange={e => updateLine(line.id, "materialCost", e.target.value)} placeholder="0.00" /></td>
+                        <td style={{ textAlign: "center" }}><input type="checkbox" className="tax-check" checked={!!line.taxable} onChange={e => updateLine(line.id, "taxable", e.target.checked)} title="Material is taxable" /></td>
+                        <td><TradeSelector item={line} onChange={(f, v) => updateLine(line.id, f, v)} /></td>
+                      </>)}
+                      {hasSubs ? <td></td> : (
+                        <td><div className="link-cell"><input value={line.link||""} onChange={e => updateLine(line.id, "link", e.target.value)} placeholder="URL..." />{line.link && <a href={line.link} target="_blank" rel="noopener noreferrer">&#8599;</a>}</div></td>
+                      )}
+                      <td className="final-price">{fmt(calcFinal(line))}</td>
+                      <td style={{ whiteSpace: "nowrap" }}><button className="add-sub-btn" onClick={() => addSubItem(line.id)}>+ Sub</button><button className="remove-btn" onClick={() => removeLine(line.id)}>×</button></td>
+                    </tr>
+                    {hasSubs && line.expanded && line.subItems.map((sub, si) => (
+                      <tr key={sub.id} className="sub-line-row">
+                        <td></td>
+                        <td></td>
+                        <td style={{ textAlign: "right", paddingRight: 0 }}><span className="sub-line-indicator"></span></td>
+                        <td style={{ fontSize: 9, color: "#999", textAlign: "center" }}>{idx+1}.{si+1}</td>
+                        <td><input value={sub.description} onChange={e => updateSubItem(line.id, sub.id, "description", e.target.value)} placeholder="Sub-item" style={{ fontSize: 10, background: "#f0f2f5" }} /></td>
+                        <td></td>
+                        <td><input className="qty-input" type="number" min="0" step="1" value={sub.qty || ""} onChange={e => updateSubItem(line.id, sub.id, "qty", e.target.value)} placeholder="1" style={{ fontSize: 10, background: "#f0f2f5" }} /></td>
+                        <td><input style={{ textAlign: "center", fontSize: 10, background: "#f0f2f5" }} value={sub.unit} onChange={e => updateSubItem(line.id, sub.id, "unit", e.target.value)} placeholder="EA" /></td>
+                        <td><input className="cost-input" type="number" min="0" step="0.01" value={sub.materialCost || ""} onChange={e => updateSubItem(line.id, sub.id, "materialCost", e.target.value)} placeholder="0.00" style={{ fontSize: 10, background: "#f0f2f5" }} /></td>
+                        <td style={{ textAlign: "center" }}><input type="checkbox" className="tax-check" checked={!!sub.taxable} onChange={e => updateSubItem(line.id, sub.id, "taxable", e.target.checked)} /></td>
+                        <td><TradeSelector item={sub} onChange={(f, v) => updateSubItem(line.id, sub.id, f, v)} /></td>
+                        <td></td>
+                        <td style={{ textAlign: "right", fontSize: 10, color: "#666", fontVariantNumeric: "tabular-nums", paddingRight: 8 }}>{fmt(calcSubFinal(sub))}</td>
+                        <td><button className="remove-btn" onClick={() => removeSubItem(line.id, sub.id)} style={{ fontSize: 14 }}>×</button></td>
+                      </tr>
+                    ))}
+                  </React.Fragment>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+        <div className="totals-bar">
+          <div className="total-item"><div className="total-label">Base Cost</div><div className="total-sub">{fmt(subtotal)}</div></div>
+          <div className="total-item"><div className="total-label">+ Markup ({settings.markup}%)</div><div className="total-sub">{fmt(markupAmt)}</div></div>
+          <div className="total-item"><div className="total-label">+ Tax ({settings.tax}% mat.)</div><div className="total-sub">{fmt(taxAmt)}</div></div>
+          <div className="total-item" style={{ borderLeft: "1px solid rgba(255,255,255,0.2)", paddingLeft: 20 }}><div className="total-label">Grand Total</div><div className="total-value">{fmt(grandTotal)}</div></div>
+        </div>
+      </div>
+
+      {showGrouped && <div className="card"><div className="card-title"><span>Subtotals by Work Code</span><button onClick={() => setShowGrouped(false)}>Hide</button></div><div>{getGroups().map(g => (<div className="group-block" key={g.code}><div className="group-header"><span>{g.code}</span><span className="group-subtotal">{fmt(g.subtotal)}</span></div><div className="group-lines">{g.items.map(l => (<div className="gl-row" key={l.id}><span className="gl-desc">{l.description || "(no description)"}</span><span className="gl-amt">{fmt(calcFinal(l))}</span></div>))}</div></div>))}</div></div>}
+
+      <div className="card">
+        <div className="card-title"><span>Qualifications, Clarifications & Exclusions</span><div style={{ display: "flex", gap: 6 }}><button onClick={resetDefaults}>Reset Defaults</button><button onClick={() => setShowQualExcl(!showQualExcl)}>{showQualExcl ? "Collapse" : "Edit"}</button></div></div>
+        {showQualExcl ? (<div>
+          <SectionEditor title="Qualifications and Clarifications Apply" items={qualifications} onChange={setQualifications} color="#0f3460" />
+          <SectionEditor title="Excluded Items" items={exclusions} onChange={setExclusions} color="#c0392b" />
+          <div className="field" style={{ marginTop: 12 }}><label>Closing Note</label><textarea value={closingNote} onChange={e => setClosingNote(e.target.value)} rows={2} placeholder="Thank you..." /></div>
+        </div>) : (<div style={{ fontSize: 11, color: "#888" }}>{qualifications.length} qualification{qualifications.length !== 1 ? "s" : ""}, {exclusions.length} exclusion{exclusions.length !== 1 ? "s" : ""} configured. Click "Edit" to modify.</div>)}
+      </div>
+
+      <div className="action-bar">
+        <div style={{ display: "flex", gap: 8 }}>
+          <button className="btn-add" onClick={addLine}>+ Add Line Item</button>
+          <button className="btn-add" onClick={() => setShowGrouped(!showGrouped)} style={{ borderStyle: "solid", background: showGrouped ? "#0f3460" : undefined, color: showGrouped ? "white" : undefined }}>{showGrouped ? "Hide Subtotals" : "View Subtotals by Code"}</button>
+        </div>
+        <div style={{ display: "flex", gap: 10 }}>
+          <button className="btn-primary" onClick={() => setShowProposal(true)}>Preview Proposal</button>
+          <button className="btn-generate" onClick={printProposal}>Print / Save PDF</button>
+        </div>
+      </div>
+
+      {/* ── Proposal Modal ── */}
+      {showProposal && (
+        <div className="modal-overlay" onClick={e => { if (e.target === e.currentTarget) setShowProposal(false); }}>
+          <div className="modal-content">
+            <div className="modal-toolbar"><span style={{ fontWeight: 600, fontSize: 13 }}>Proposal Preview — {activeEst.name}</span><div style={{ display: "flex", gap: 8 }}><button onClick={() => window.print()} style={{ background: "#27ae60", color: "white", border: "none" }}>Print / Save PDF</button><button onClick={() => setShowProposal(false)} style={{ background: "#eee", color: "#333", border: "1px solid #ddd" }}>Close</button></div></div>
+            <div className="proposal-doc" id="proposal-print" ref={printRef}>
+              <div className="company-header"><div><div className="company-name">{settings.companyName || "[Your Company Name]"}</div><div className="company-detail">{settings.companyAddress}</div><div className="company-detail">{[settings.companyPhone, settings.companyEmail].filter(Boolean).join("  |  ")}</div></div><div className="proposal-badge">PROPOSAL</div></div>
+              <div className="meta-grid">
+                <span className="meta-label">Proposal #:</span><span>{project.estimateNum}</span>
+                <span className="meta-label">Date:</span><span>{project.date ? new Date(project.date+"T12:00:00").toLocaleDateString("en-US",{year:"numeric",month:"long",day:"numeric"}) : ""}</span>
+                <span className="meta-label">Client:</span><span>{project.clientName}</span>
+                <span className="meta-label">Location:</span><span>{project.location}</span>
+                <span className="meta-label">Project:</span><span>{project.projectName}</span><span></span><span></span>
+              </div>
+              <div className="section-title">Scope of Work</div>
+              <p style={{ fontSize: 11, marginBottom: 10, color: "#444" }}>{settings.companyName || "[Your Company Name]"} is pleased to submit this proposal for the work described below. All work will be performed in accordance with applicable codes and industry standards.</p>
+              <table className="group-table"><thead><tr><th>Code / Description</th><th style={{ width: 110, textAlign: "right" }}>Amount</th></tr></thead><tbody>
+                {getGroups().map(g => (<React.Fragment key={g.code}>
+                  <tr className="grp-hdr"><td>{g.code}</td><td></td></tr>
+                  {g.items.map(l => <tr className="grp-line" key={l.id}><td>{l.description || "(no description)"}</td><td style={{ textAlign: "right" }}>{fmt(calcFinal(l))}</td></tr>)}
+                  <tr className="grp-sub"><td style={{ textAlign: "right", paddingRight: 12 }}>Subtotal — {g.code}</td><td style={{ textAlign: "right" }}>{fmt(g.subtotal)}</td></tr>
+                </React.Fragment>))}
+                <tr className="total-row"><td style={{ textAlign: "right", paddingRight: 16 }}>TOTAL</td><td>{fmt(grandTotal)}</td></tr>
+              </tbody></table>
+              <div className="qual-section"><h4>Qualifications and Clarifications Apply</h4><ol>{qualifications.filter(q => q.text.trim()).map((q, i) => { const subs = q.subs || []; return <li key={i}>{q.text}{subs.length > 0 && <ol className="sub-list">{subs.filter(s => s.trim()).map((s, si) => <li key={si}>{s}</li>)}</ol>}</li>; })}</ol></div>
+              <div className="qual-section" style={{ marginTop: 14 }}><h4 style={{ color: "#c0392b" }}>Excluded Items:</h4><ol>{exclusions.filter(q => q.text.trim()).map((q, i) => { const subs = q.subs || []; return <li key={i}>{q.text}{subs.length > 0 && <ol className="sub-list">{subs.filter(s => s.trim()).map((s, si) => <li key={si}>{s}</li>)}</ol>}</li>; })}</ol></div>
+              <div className="company-block"><strong>{settings.companyName || "[Your Company Name]"}</strong><br/>{settings.companyAddress && <>{settings.companyAddress}<br/></>}{settings.companyPhone && <>PHONE - {settings.companyPhone}<br/></>}{settings.companyEmail && <>{settings.companyEmail}<br/></>}</div>
+              {closingNote && <div className="closing">{closingNote}</div>}
+              <div className="sig-block"><div><div className="sig-line">Client Signature</div><div className="sig-line" style={{ marginTop: 20 }}>Printed Name &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; Date</div></div><div><div className="sig-line">Contractor Signature</div><div className="sig-line" style={{ marginTop: 20 }}>Printed Name &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; Date</div></div></div>
+            </div>
+          </div>
+        </div>
+      )}
+      </div>
+    </div>
+    )}
+    {toast && <div className="toast">{toast}</div>}
+    </>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+</script>
+</body>
+</html>
