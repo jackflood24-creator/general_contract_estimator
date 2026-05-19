@@ -3,7 +3,7 @@ const { defineSecret } = require("firebase-functions/params");
 
 const anthropicKey = defineSecret("ANTHROPIC_API_KEY");
 
-exports.claudeProxy = onRequest({ secrets: [anthropicKey], cors: false }, async (req, res) => {
+exports.claudeProxy = onRequest({ secrets: [anthropicKey], cors: false, invoker: "public" }, async (req, res) => {
   res.set("Access-Control-Allow-Origin", "*");
   res.set("Access-Control-Allow-Methods", "POST, OPTIONS");
   res.set("Access-Control-Allow-Headers", "Content-Type");
