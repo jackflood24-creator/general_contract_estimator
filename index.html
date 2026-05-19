@@ -451,8 +451,8 @@
   .ai-error { font-size: 12px; color: #c33; margin-top: 8px; background: #fee; border: 1px solid #fcc; border-radius: 6px; padding: 7px 10px; }
 
   /* ── Chat widget ── */
-  .chat-fab { position: fixed; bottom: 24px; right: 24px; z-index: 1000; width: 52px; height: 52px; border-radius: 50%; background: linear-gradient(135deg, #0f3460, #1a2a6e); color: white; border: none; font-size: 22px; cursor: pointer; box-shadow: 0 4px 16px rgba(15,52,96,0.4); display: flex; align-items: center; justify-content: center; transition: transform 0.15s; }
-  .chat-fab:hover { transform: scale(1.08); }
+  .chat-fab { position: fixed; bottom: 24px; right: 24px; z-index: 1000; height: 48px; border-radius: 24px; background: linear-gradient(135deg, #0f3460, #1a2a6e); color: white; border: none; font-size: 14px; font-weight: 700; cursor: pointer; box-shadow: 0 4px 16px rgba(15,52,96,0.4); display: flex; align-items: center; gap: 8px; padding: 0 18px; transition: transform 0.15s; font-family: inherit; letter-spacing: 0.3px; }
+  .chat-fab:hover { transform: scale(1.04); }
   .chat-window { position: fixed; bottom: 88px; right: 24px; z-index: 1000; width: 340px; background: white; border-radius: 14px; box-shadow: 0 8px 40px rgba(0,0,0,0.18); border: 1px solid #e0e8ff; display: flex; flex-direction: column; overflow: hidden; }
   .chat-header { background: linear-gradient(135deg, #1a1a2e, #0f3460); color: white; padding: 12px 16px; font-size: 13px; font-weight: 700; display: flex; justify-content: space-between; align-items: center; }
   .chat-header span { font-size: 11px; opacity: 0.7; font-weight: 400; }
@@ -2090,17 +2090,19 @@ function App() {
     if (!aiInput.trim()) return;
     setAiLoading(true); setAiError(""); setAiParsed([]);
     const system = aiSystemBase(
-      "You are an AI estimating assistant for a general contracting company. Convert the user's plain English job description into structured line items for a construction estimate.\n\nReturn ONLY a valid JSON array — no markdown, no explanation. Each object must have:\n- description: string (professional construction phrasing)\n- qty: number\n- unit: string (sqft, lf, ea, hr, ls, cy, ton, etc.)\n- costEach: number (material cost per unit in USD; 0 if labor only)\n- laborHours: number (total labor hours for this item)\n\nBreak compound tasks into individual line items. Use realistic industry pricing. If quantity is unknown, use qty:1 unit:\"ls\"."
+      "You are an AI estimating assistant for a general contracting company. The user will describe work to be done — ignore any project address or client name and focus only on the scope of work.\n\nConvert the description into structured line items for a construction estimate. Your response must contain a JSON array. Each object must have:\n- description: string (professional construction phrasing)\n- qty: number\n- unit: string (sqft, lf, ea, hr, ls, cy, ton, etc.)\n- costEach: number (material cost per unit in USD; 0 if labor only)\n- laborHours: number (total labor hours for this item)\n\nBreak compound tasks into individual line items. Use realistic industry pricing. If quantity is unknown, use qty:1 unit:\"ls\"."
     );
     try {
       const text = await callClaude([{ role: "user", content: aiInput }], system, 1500);
-      const cleaned = text.replace(/```json|```/g, "").trim();
-      const items = JSON.parse(cleaned);
-      if (!Array.isArray(items)) throw new Error("Expected array");
+      // Extract JSON array from anywhere in the response
+      const match = text.match(/\[[\s\S]*\]/);
+      if (!match) throw new Error("No JSON array in response: " + text.slice(0, 200));
+      const items = JSON.parse(match[0]);
+      if (!Array.isArray(items) || items.length === 0) throw new Error("Empty or invalid array");
       setAiParsed(items);
     } catch (e) {
-      setAiError("Couldn't parse the response — try rephrasing or being more specific.");
-      console.error(e);
+      setAiError("AI couldn't generate line items — try describing just the work, e.g. \"demo tile, install LVP flooring 200 sqft\".");
+      console.error("AI parse error:", e);
     } finally {
       setAiLoading(false);
     }
@@ -2561,10 +2563,6 @@ function App() {
             <div className="field"><label>Markup %</label><input className="rate-input" type="number" value={settings.markup} onChange={e => setSettings(s => ({...s, markup: parseFloat(e.target.value) || 0}))} /></div>
             <div className="field"><label>Sales Tax % (materials only)</label><input className="rate-input" type="number" value={settings.tax} onChange={e => setSettings(s => ({...s, tax: parseFloat(e.target.value) || 0}))} /></div>
           </div>
-          <div className="field" style={{ marginTop: 12 }}>
-            <label>&#10024; AI Business Context <span style={{ fontWeight: 400, textTransform: "none", letterSpacing: 0, color: "#999" }}>— describes your company to the AI assistant</span></label>
-            <textarea value={settings.aiContext || ""} onChange={e => setSettings(s => ({...s, aiContext: e.target.value}))} rows={3} placeholder="e.g. We are a general contracting company specializing in commercial tenant improvements and light industrial work in the Chicago metro area. We self-perform demo, framing, drywall, and paint. We subcontract electrical, plumbing, and HVAC. Typical project size $50K–$500K." />
-          </div>
         </>}
       </div>
 
@@ -2783,7 +2781,8 @@ function App() {
     {authResolved && (
       <>
         <button className="chat-fab" onClick={() => setChatOpen(o => !o)} title="AI Assistant">
-          {chatOpen ? "✕" : "🤖"}
+          <span>{chatOpen ? "✕" : "🤖"}</span>
+          <span>{chatOpen ? "Close" : "Ask AI"}</span>
         </button>
         {chatOpen && (
           <div className="chat-window">
