@@ -122,7 +122,7 @@
   .proposal-doc .grp-line td:last-child { font-weight: 500; }
   .proposal-doc .grp-sub td { font-weight: 700; color: #0f3460; font-size: 11px; border-top: 1px solid #bbb; background: #f4f6f9; padding: 6px 12px; }
 
-  .totals-bar { display: flex; justify-content: flex-end; align-items: center; gap: 20px; padding: 16px 20px; background: linear-gradient(135deg, #1a1a2e, #0f3460); border-radius: 0 0 10px 10px; color: white; margin-top: -1px; flex-wrap: wrap; }
+  .totals-bar { display: flex; justify-content: flex-end; align-items: center; gap: 20px; padding: 16px 20px; background: linear-gradient(135deg, #1a1a2e, #0f3460); border-radius: 10px; color: white; flex-wrap: wrap; position: sticky; bottom: 16px; box-shadow: 0 4px 24px rgba(15,52,96,0.35); z-index: 10; }
   .totals-bar .total-item { text-align: right; }
   .totals-bar .total-label { font-size: 10px; opacity: 0.7; text-transform: uppercase; letter-spacing: 0.5px; }
   .totals-bar .total-value { font-size: 20px; font-weight: 700; font-variant-numeric: tabular-nums; }
@@ -2090,11 +2090,10 @@ function App() {
     if (!aiInput.trim()) return;
     setAiLoading(true); setAiError(""); setAiParsed([]);
     const system = aiSystemBase(
-      "You are an AI estimating assistant for a general contracting company. The user will describe work to be done — ignore any project address or client name and focus only on the scope of work.\n\nConvert the description into structured line items for a construction estimate. Your response must contain a JSON array. Each object must have:\n- description: string (professional construction phrasing)\n- qty: number\n- unit: string (sqft, lf, ea, hr, ls, cy, ton, etc.)\n- costEach: number (material cost per unit in USD; 0 if labor only)\n- laborHours: number (total labor hours for this item)\n\nBreak compound tasks into individual line items. Use realistic industry pricing. If quantity is unknown, use qty:1 unit:\"ls\"."
+      "You are an AI estimating assistant for a general contracting company. The user will describe work to be done — ignore any project address or client name and focus only on the scope of work.\n\nReturn a JSON array of work categories. Each category is a parent line item with detailed sub-tasks underneath. Format:\n[\n  {\n    \"description\": \"High-level work category (e.g. Vinyl Plank Flooring)\",\n    \"subItems\": [\n      {\n        \"description\": \"Specific task (e.g. Demo and remove existing flooring)\",\n        \"qty\": 200,\n        \"unit\": \"sqft\",\n        \"materialCost\": 0,\n        \"laborHours\": 4,\n        \"laborRate\": 65\n      }\n    ]\n  }\n]\n\nRules:\n- Group related tasks under one parent. Use separate parents for distinct scopes (e.g. Flooring, Paint, Demo).\n- materialCost is cost per unit in USD (0 if labor-only task)\n- laborRate is realistic hourly rate for the trade (e.g. 55-85 for general labor, 75-110 for electrical/plumbing)\n- laborHours is total hours for that specific sub-task\n- Use realistic industry pricing\n- If quantity unknown, use qty:1 unit:\"ls\""
     );
     try {
-      const text = await callClaude([{ role: "user", content: aiInput }], system, 1500);
-      // Extract JSON array from anywhere in the response
+      const text = await callClaude([{ role: "user", content: aiInput }], system, 2000);
       const match = text.match(/\[[\s\S]*\]/);
       if (!match) throw new Error("No JSON array in response: " + text.slice(0, 200));
       const items = JSON.parse(match[0]);
@@ -2110,19 +2109,26 @@ function App() {
 
   const handleAiAddLines = () => {
     if (!aiParsed.length) return;
+    let added = 0;
     setLines(prev => [
       ...prev,
-      ...aiParsed.map(p => ({
-        ...newLineItem(),
-        description: String(p.description || ""),
-        qty: String(parseFloat(p.qty) || 1),
-        unit: String(p.unit || "ea").toUpperCase(),
-        costEach: String(parseFloat(p.costEach) || 0),
-        laborSTHours: String(parseFloat(p.laborHours) || 0),
-      }))
+      ...aiParsed.map(p => {
+        const subs = (p.subItems || []).map(s => ({
+          ...newSubItem(),
+          description: String(s.description || ""),
+          qty: parseFloat(s.qty) || 1,
+          unit: String(s.unit || "ea").toUpperCase(),
+          materialCost: parseFloat(s.materialCost) || 0,
+          taxable: true,
+          laborRate: parseFloat(s.laborRate) || 0,
+          laborSTHours: parseFloat(s.laborHours) || 0,
+        }));
+        added++;
+        return { ...newLineItem(), description: String(p.description || ""), subItems: subs, expanded: subs.length > 0 };
+      })
     ]);
     setAiParsed([]); setAiInput(""); setAiPanelOpen(false);
-    showToast(`Added ${aiParsed.length} line item${aiParsed.length !== 1 ? "s" : ""}`);
+    showToast(`Added ${added} line item${added !== 1 ? "s" : ""} with sub-tasks`);
   };
 
   const handleChatSend = async () => {
@@ -2150,6 +2156,19 @@ function App() {
   const updateSubItem = (lineId, subId, field, value) => setLines(prev => prev.map(l => l.id === lineId ? { ...l, subItems: l.subItems.map(s => s.id === subId ? { ...s, [field]: value } : s) } : l));
   const removeSubItem = (lineId, subId) => setLines(prev => prev.map(l => l.id === lineId ? { ...l, subItems: l.subItems.filter(s => s.id !== subId) } : l));
   const toggleExpand = (lineId) => setLines(prev => prev.map(l => l.id === lineId ? { ...l, expanded: !l.expanded } : l));
+
+  const demoteToSubItem = (lineId) => {
+    setLines(prev => {
+      const idx = prev.findIndex(l => l.id === lineId);
+      if (idx <= 0) return prev;
+      const line = prev[idx];
+      const sub = { ...newSubItem(), description: line.description, materialCost: parseFloat(line.materialCost) || 0, taxable: !!line.taxable, laborTrade: line.laborTrade || "", laborRate: parseFloat(line.laborRate) || 0, laborSTHours: parseFloat(line.laborSTHours) || 0, qty: parseFloat(line.qty) || 1, unit: line.unit || "EA" };
+      return prev.filter(l => l.id !== lineId).map((l, i, arr) => {
+        const origIdx = prev.findIndex(p => p.id === l.id);
+        return origIdx === idx - 1 ? { ...l, subItems: [...l.subItems, sub], expanded: true } : l;
+      });
+    });
+  };
 
   // Drag-and-drop reordering
   const dragItem = useRef(null);
@@ -2641,7 +2660,7 @@ function App() {
                         <td><div className="link-cell"><input value={line.link||""} onChange={e => updateLine(line.id, "link", e.target.value)} placeholder="URL..." />{line.link && <a href={line.link} target="_blank" rel="noopener noreferrer">&#8599;</a>}</div></td>
                       )}
                       <td className="final-price">{fmt(calcFinal(line))}</td>
-                      <td style={{ whiteSpace: "nowrap" }}><button className="add-sub-btn" onClick={() => addSubItem(line.id)}>+ Sub</button><button className="remove-btn" onClick={() => removeLine(line.id)}>×</button></td>
+                      <td style={{ whiteSpace: "nowrap" }}><button className="add-sub-btn" onClick={() => addSubItem(line.id)}>+ Sub</button><button className="add-sub-btn" onClick={() => demoteToSubItem(line.id)} title="Move this line under the one above it" style={{ marginLeft: 2 }}>↳</button><button className="remove-btn" onClick={() => removeLine(line.id)}>×</button></td>
                     </tr>
                     {hasSubs && line.expanded && line.subItems.map((sub, si) => (
                       <tr key={sub.id} className="sub-line-row">
@@ -2712,16 +2731,21 @@ function App() {
           {aiError && <div className="ai-error">{aiError}</div>}
           {aiParsed.length > 0 && (
             <div className="ai-preview" style={{ marginTop: 12 }}>
-              <div className="ai-preview-row ai-preview-hdr">
-                <span>Description</span><span>Qty</span><span>Unit</span><span>Cost/Unit</span><span>Labor Hrs</span>
-              </div>
               {aiParsed.map((p, i) => (
-                <div key={i} className="ai-preview-row">
-                  <span title={p.description}>{p.description}</span>
-                  <span>{p.qty}</span>
-                  <span>{p.unit}</span>
-                  <span>${parseFloat(p.costEach || 0).toFixed(2)}</span>
-                  <span>{parseFloat(p.laborHours || 0).toFixed(1)}h</span>
+                <div key={i}>
+                  <div style={{ padding: "8px 12px", background: "#1a1a2e", color: "white", fontWeight: 700, fontSize: 11, display: "flex", alignItems: "center", gap: 6 }}>
+                    <span>📁</span><span>{p.description}</span>
+                    <span style={{ marginLeft: "auto", opacity: 0.6, fontWeight: 400 }}>{(p.subItems||[]).length} sub-task{(p.subItems||[]).length !== 1 ? "s" : ""}</span>
+                  </div>
+                  {(p.subItems || []).map((s, si) => (
+                    <div key={si} className="ai-preview-row" style={{ paddingLeft: 24, fontSize: 11 }}>
+                      <span style={{ color: "#888", marginRight: 4 }}>↳</span>
+                      <span style={{ flex: 1 }} title={s.description}>{s.description}</span>
+                      <span style={{ color: "#666", marginLeft: 8 }}>{s.qty} {s.unit}</span>
+                      <span style={{ color: "#0f3460", marginLeft: 12, fontWeight: 600 }}>${parseFloat(s.materialCost || 0).toFixed(2)}/unit</span>
+                      <span style={{ color: "#555", marginLeft: 12 }}>{parseFloat(s.laborHours || 0).toFixed(1)}h @ ${parseFloat(s.laborRate || 0)}/hr</span>
+                    </div>
+                  ))}
                 </div>
               ))}
             </div>
@@ -2730,14 +2754,14 @@ function App() {
       )}
 
       <div className="action-bar">
-        <div style={{ display: "flex", gap: 8 }}>
-          <button className="btn-add" onClick={addLine}>+ Add Line Item</button>
-          <button className="btn-add" onClick={() => { setAiPanelOpen(o => !o); setAiParsed([]); setAiError(""); }} style={{ background: aiPanelOpen ? "#1a1a2e" : undefined, color: aiPanelOpen ? "white" : undefined, borderColor: "#0f3460" }}>&#10024; AI Assist</button>
-          <button className="btn-add" onClick={() => setShowGrouped(!showGrouped)} style={{ borderStyle: "solid", background: showGrouped ? "#0f3460" : undefined, color: showGrouped ? "white" : undefined }}>{showGrouped ? "Hide Subtotals" : "View Subtotals by Code"}</button>
+        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+          <button className="btn-add" onClick={addLine}>+ Line Item</button>
+          <button className="btn-add" onClick={() => { setAiPanelOpen(o => !o); setAiParsed([]); setAiError(""); }} style={{ background: aiPanelOpen ? "#1a1a2e" : "linear-gradient(135deg,#0f3460,#1a2a6e)", color: "white", border: "none", fontWeight: 700 }}>&#10024; AI Assist</button>
+          <button className="btn-add" onClick={() => setShowGrouped(!showGrouped)} style={{ borderStyle: "solid", background: showGrouped ? "#0f3460" : undefined, color: showGrouped ? "white" : undefined }}>{showGrouped ? "Hide Subtotals" : "Subtotals by Code"}</button>
         </div>
         <div style={{ display: "flex", gap: 10 }}>
-          <button className="btn-primary" onClick={() => setShowProposal(true)}>Preview Proposal</button>
-          <button className="btn-generate" onClick={printProposal}>Print / Save PDF</button>
+          <button className="btn-primary" onClick={() => setShowProposal(true)}>&#128196; Preview</button>
+          <button className="btn-generate" onClick={printProposal}>Print / PDF</button>
         </div>
       </div>
 
