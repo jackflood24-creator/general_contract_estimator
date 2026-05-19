@@ -124,15 +124,16 @@ service firebase.storage {
 
 ## GitHub Actions setup
 
-The workflow at `.github/workflows/deploy.yml` uses `FIREBASE_TOKEN`.
+**Already configured and working as of 2026-05-19.**
 
-To generate the token:
+The workflow at `.github/workflows/deploy.yml` uses `FIREBASE_TOKEN`, which is stored as a repository secret. Every push to `main` auto-deploys to Firebase. No manual `firebase deploy` needed.
+
+If the token ever expires or needs to be rotated:
 ```bash
 npx firebase-tools login:ci
 ```
-Copy the printed token, then add it as a repository secret:
-**GitHub repo → Settings → Secrets and variables → Actions → New repository secret**
-Name: `FIREBASE_TOKEN`, Value: (the token)
+Replace the `FIREBASE_TOKEN` secret at:
+**GitHub repo → Settings → Secrets and variables → Actions**
 
 ---
 
@@ -151,7 +152,13 @@ Name: `FIREBASE_TOKEN`, Value: (the token)
 
 ---
 
-## Recent work (2026-05-17)
+## Recent work (2026-05-19)
+
+### GitHub repo + auto-deploy wired up
+- Initialized proper git repo at `~/Desktop/estimator-site/` (was incorrectly falling through to home-directory git root)
+- Connected to `github.com/jackflood24-creator/general_contract_estimator`
+- Added `.github/workflows/deploy.yml` — deploys on every push to `main` via `FIREBASE_TOKEN` secret
+- `FIREBASE_TOKEN` secret added; first successful deploy confirmed 2026-05-19
 
 ### Login wall removed
 - Replaced email/password auth with anonymous Firebase Auth (`signInAnonymously`)
