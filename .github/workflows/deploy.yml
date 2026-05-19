@@ -1,4 +1,4 @@
-name: Deploy to Firebase Hosting
+name: Deploy to Firebase
 
 on:
   push:
@@ -11,5 +11,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Deploy to Firebase Hosting
-        run: npx firebase-tools@latest deploy --only hosting --token ${{ secrets.FIREBASE_TOKEN }} --project project-general-estimator --non-interactive
+      - name: Install function dependencies
+        run: npm install --prefix functions
+
+      - name: Deploy to Firebase (hosting + functions)
+        run: npx firebase-tools@latest deploy --token ${{ secrets.FIREBASE_TOKEN }} --project project-general-estimator --non-interactive

@@ -4,13 +4,24 @@
     "ignore": [
       "firebase.json",
       "**/.*",
-      "**/node_modules/**"
+      "**/node_modules/**",
+      "functions/**"
     ],
     "rewrites": [
+      {
+        "source": "/api/claude",
+        "function": "claudeProxy",
+        "region": "us-central1"
+      },
       {
         "source": "**",
         "destination": "/index.html"
       }
     ]
-  }
+  },
+  "functions": [{
+    "source": "functions",
+    "codebase": "default",
+    "ignore": ["node_modules", ".git"]
+  }]
 }
