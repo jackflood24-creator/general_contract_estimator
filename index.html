@@ -15,7 +15,7 @@
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
   * { margin: 0; padding: 0; box-sizing: border-box; }
-  body { font-family: 'Inter', -apple-system, sans-serif; background: #f0f2f5; color: #1a1a2e; }
+  body { font-family: 'Inter', -apple-system, sans-serif; background: #f0f2f5; color: #1a1a2e; padding-bottom: 90px; }
 
   @media print {
     body * { visibility: hidden !important; }
@@ -24,7 +24,7 @@
     @page { margin: 0.5in; size: letter; }
   }
 
-  .app-container { max-width: 1250px; margin: 0 auto; padding: 16px; padding-bottom: 100px; }
+  .app-container { max-width: 1250px; margin: 0 auto; padding: 16px; }
   .app-header { background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%); color: white; padding: 20px 28px; border-radius: 12px; margin-bottom: 16px; display: flex; justify-content: space-between; align-items: center; }
   .app-header h1 { font-size: 22px; font-weight: 700; letter-spacing: -0.5px; }
   .app-header .subtitle { font-size: 12px; opacity: 0.7; margin-top: 2px; }
@@ -122,7 +122,8 @@
   .proposal-doc .grp-line td:last-child { font-weight: 500; }
   .proposal-doc .grp-sub td { font-weight: 700; color: #0f3460; font-size: 11px; border-top: 1px solid #bbb; background: #f4f6f9; padding: 6px 12px; }
 
-  .totals-bar { display: flex; justify-content: flex-end; align-items: center; gap: 20px; padding: 16px 20px; background: linear-gradient(135deg, #1a1a2e, #0f3460); border-radius: 10px; color: white; flex-wrap: wrap; position: sticky; bottom: 16px; box-shadow: 0 4px 24px rgba(15,52,96,0.35); z-index: 10; }
+  .totals-bar { position: fixed; bottom: 0; left: 0; right: 0; z-index: 50; background: linear-gradient(135deg, #1a1a2e, #0f3460); box-shadow: 0 -4px 24px rgba(15,52,96,0.35); color: white; }
+  .totals-bar-inner { max-width: 1250px; margin: 0 auto; display: flex; justify-content: flex-end; align-items: center; gap: 20px; padding: 14px 20px; flex-wrap: wrap; }
   .totals-bar .total-item { text-align: right; }
   .totals-bar .total-label { font-size: 10px; opacity: 0.7; text-transform: uppercase; letter-spacing: 0.5px; }
   .totals-bar .total-value { font-size: 20px; font-weight: 700; font-variant-numeric: tabular-nums; }
@@ -2676,7 +2677,7 @@ function App() {
                         <td style={{ textAlign: "center" }}><input type="checkbox" className="tax-check" checked={!!sub.taxable} onChange={e => updateSubItem(line.id, sub.id, "taxable", e.target.checked)} /></td>
                         <td><TradeSelector item={sub} onChange={(f, v) => updateSubItem(line.id, sub.id, f, v)} /></td>
                         <td></td>
-                        <td style={{ textAlign: "right", fontSize: 10, color: "#666", fontVariantNumeric: "tabular-nums", paddingRight: 8 }}>{fmt(calcSubFinal(sub))}</td>
+                        <td style={{ textAlign: "right", fontSize: 9, color: "#999", fontVariantNumeric: "tabular-nums", paddingRight: 8 }}>base: {fmt(calcSubBase(sub))}</td>
                         <td><button className="remove-btn" onClick={() => removeSubItem(line.id, sub.id)} style={{ fontSize: 14 }}>×</button></td>
                       </tr>
                     ))}
@@ -2687,10 +2688,12 @@ function App() {
           </table>
         </div>
         <div className="totals-bar">
-          <div className="total-item"><div className="total-label">Base Cost</div><div className="total-sub">{fmt(subtotal)}</div></div>
-          <div className="total-item"><div className="total-label">+ Markup ({settings.markup}%)</div><div className="total-sub">{fmt(markupAmt)}</div></div>
-          <div className="total-item"><div className="total-label">+ Tax ({settings.tax}% mat.)</div><div className="total-sub">{fmt(taxAmt)}</div></div>
-          <div className="total-item" style={{ borderLeft: "1px solid rgba(255,255,255,0.2)", paddingLeft: 20 }}><div className="total-label">Grand Total</div><div className="total-value">{fmt(grandTotal)}</div></div>
+          <div className="totals-bar-inner">
+            <div className="total-item"><div className="total-label">Base Cost</div><div className="total-sub">{fmt(subtotal)}</div></div>
+            <div className="total-item"><div className="total-label">+ Markup ({settings.markup}%)</div><div className="total-sub">{fmt(markupAmt)}</div></div>
+            <div className="total-item"><div className="total-label">+ Tax ({settings.tax}% mat.)</div><div className="total-sub">{fmt(taxAmt)}</div></div>
+            <div className="total-item" style={{ borderLeft: "1px solid rgba(255,255,255,0.2)", paddingLeft: 20 }}><div className="total-label">Grand Total</div><div className="total-value">{fmt(grandTotal)}</div></div>
+          </div>
         </div>
       </div>
 
